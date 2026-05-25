@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron';
-import { bootstrapStore, inspectStore } from '../storage/fileStore';
+import { bootstrapStore, inspectStore, writeStore } from '../storage/fileStore';
 import { resolveAppDataStorePaths } from '../storage/appPaths';
 import type {
   StoreBootstrap,
@@ -119,12 +119,34 @@ export const unlockStoreAtRoot = async (
   };
 };
 
+export const saveUnlockedStoreAtRoot = async (
+  rootDir: string,
+  snapshot: UnlockedStoreSnapshot
+): Promise<UnlockedStoreSnapshot> => {
+  const currentStore = await requireAuthenticatedStoreSessionAtRoot(rootDir);
+  const savedStore = await writeStore(rootDir, {
+    settings: {
+      ...currentStore.settings,
+      lastOpenedMonth: snapshot.settings.lastOpenedMonth,
+      lastSelectedDate: snapshot.settings.lastSelectedDate
+    },
+    projects: snapshot.projects,
+    entries: snapshot.entries
+  });
+
+  return createUnlockedStoreSnapshot(savedStore);
+};
+
 export const registerStorageIpc = () => {
   ipcMain.removeHandler(STORAGE_IPC_CHANNELS.loadStore);
+  ipcMain.removeHandler(STORAGE_IPC_CHANNELS.saveStore);
   ipcMain.removeHandler(STORAGE_IPC_CHANNELS.unlock);
 
   ipcMain.handle(STORAGE_IPC_CHANNELS.loadStore, () =>
     loadBootstrapStateFromRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir)
+  );
+  ipcMain.handle(STORAGE_IPC_CHANNELS.saveStore, (_event, snapshot: UnlockedStoreSnapshot) =>
+    saveUnlockedStoreAtRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir, snapshot)
   );
   ipcMain.handle(STORAGE_IPC_CHANNELS.unlock, (_event, pin: string) =>
     unlockStoreAtRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir, pin)

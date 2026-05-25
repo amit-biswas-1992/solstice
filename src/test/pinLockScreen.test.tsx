@@ -77,11 +77,14 @@ describe('PinLockScreen bootstrap flow', () => {
         }
       });
 
+    const saveStore = vi.fn();
+
     Object.defineProperty(window, 'dailyNotesDesktop', {
       configurable: true,
       value: {
         version: '0.1.0',
         loadStore,
+        saveStore,
         unlock
       }
     });

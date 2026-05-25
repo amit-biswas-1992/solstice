@@ -70,6 +70,20 @@ export default function App() {
     }
   };
 
+  const handlePersistStore = async (nextStore: UnlockedStoreSnapshot) => {
+    const savedStore = await window.dailyNotesDesktop.saveStore(nextStore);
+    setStore(savedStore);
+    setBootstrap((current) =>
+      current
+        ? {
+            ...current,
+            store: savedStore
+          }
+        : current
+    );
+    return savedStore;
+  };
+
   if (loadError) {
     return (
       <main className="app-shell">
@@ -124,5 +138,11 @@ export default function App() {
     );
   }
 
-  return <WorkspaceShell appVersion={window.dailyNotesDesktop.version} store={unlockedStore} />;
+  return (
+    <WorkspaceShell
+      appVersion={window.dailyNotesDesktop.version}
+      onPersistStore={handlePersistStore}
+      store={unlockedStore}
+    />
+  );
 }

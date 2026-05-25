@@ -7,10 +7,16 @@ import type { UnlockedStoreSnapshot } from '../../types/desktopBridge';
 
 interface WorkspaceShellProps {
   appVersion: string;
+  onPersistStore?: (store: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>;
   store: UnlockedStoreSnapshot;
 }
 
-export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProps) {
+interface PersistEntriesResult {
+  error?: string;
+  ok: boolean;
+}
+
+export default function WorkspaceShell({ appVersion, onPersistStore, store }: WorkspaceShellProps) {
   const storeSelection = useMemo(
     () => ({
       visibleMonth: store.settings.lastOpenedMonth,
@@ -53,6 +59,47 @@ export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProp
     });
   };
 
+  const persistEntries = async (
+    nextEntries: typeof entries,
+    options?: {
+      selectedDate?: string;
+      visibleMonth?: string;
+    }
+  ): Promise<PersistEntriesResult> => {
+    const previousEntries = entries;
+
+    setEntries(nextEntries);
+
+    if (!onPersistStore) {
+      return {
+        ok: true
+      };
+    }
+
+    try {
+      const savedStore = await onPersistStore({
+        settings: {
+          lastOpenedMonth: options?.visibleMonth ?? visibleMonth,
+          lastSelectedDate: options?.selectedDate ?? selectedDate
+        },
+        projects: store.projects,
+        entries: nextEntries
+      });
+      setEntries(savedStore.entries);
+
+      return {
+        ok: true
+      };
+    } catch (error) {
+      setEntries(previousEntries);
+
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Unable to save the current day changes.'
+      };
+    }
+  };
+
   return (
     <main className="workspace-shell">
       <section className="workspace-frame" aria-labelledby="workspace-title">
@@ -83,8 +130,9 @@ export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProp
           />
           <DayDetailPanel
             entries={entries}
-            onEntriesChange={setEntries}
+            onPersistEntries={persistEntries}
             projects={store.projects}
+            onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
           />
         </div>

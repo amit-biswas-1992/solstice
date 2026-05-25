@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   loadBootstrapStateFromRoot,
   requireAuthenticatedStoreSessionAtRoot,
+  saveUnlockedStoreAtRoot,
   unlockStoreAtRoot
 } from '../../electron/ipc/storageIpc';
 import { resolveStorePaths } from '../../electron/storage/appPaths';
@@ -140,6 +141,68 @@ describe('storageIpc auth bootstrap contract', () => {
       settings: {
         lastOpenedMonth: '2026-05',
         lastSelectedDate: '2026-05-25'
+      }
+    });
+  });
+
+  it('writes unlocked day-detail edits through the save path and preserves the stored PIN', async () => {
+    const root = await createRoot('save-store');
+    const paths = resolveStorePaths(root);
+    await seedLegacyStoreFiles(root);
+
+    await expect(unlockStoreAtRoot(root, '4321')).resolves.toMatchObject({ ok: true });
+
+    const savedSnapshot = await saveUnlockedStoreAtRoot(root, {
+      settings: {
+        lastOpenedMonth: '2026-05',
+        lastSelectedDate: '2026-05-27'
+      },
+      projects: [
+        {
+          id: 'project-alpha',
+          name: 'Alpha',
+          createdAt: '2026-05-25T10:00:00.000Z',
+          updatedAt: '2026-05-25T10:00:00.000Z'
+        }
+      ],
+      entries: {
+        '2026-05-27': {
+          notes: [
+            {
+              id: 'note-1',
+              text: 'Moved note',
+              projectId: 'project-alpha',
+              createdAt: '2026-05-25T08:00:00.000Z',
+              updatedAt: '2026-05-27T08:00:00.000Z'
+            }
+          ],
+          tasks: []
+        }
+      }
+    });
+
+    expect(savedSnapshot.settings).toEqual({
+      lastOpenedMonth: '2026-05',
+      lastSelectedDate: '2026-05-27'
+    });
+    expect(savedSnapshot.entries['2026-05-27']?.notes[0]?.text).toBe('Moved note');
+    await expect(fs.access(paths.currentFile)).resolves.toBeUndefined();
+
+    await expect(requireAuthenticatedStoreSessionAtRoot(root)).resolves.toMatchObject({
+      settings: {
+        pin: '4321',
+        lastOpenedMonth: '2026-05',
+        lastSelectedDate: '2026-05-27'
+      },
+      entries: {
+        '2026-05-27': {
+          notes: [
+            {
+              text: 'Moved note',
+              projectId: 'project-alpha'
+            }
+          ]
+        }
       }
     });
   });

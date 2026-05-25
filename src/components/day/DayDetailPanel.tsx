@@ -5,11 +5,24 @@ import StatusToast from '../common/StatusToast';
 import EntryPopupEditor from './EntryPopupEditor';
 import NotesSection from './NotesSection';
 import TasksSection from './TasksSection';
-import { createNote, createTask, updateEntriesForDate } from './dayDetailUtils';
+import {
+  createNote,
+  createTask,
+  removeItemFromEntries,
+  upsertItemInEntries,
+  updateEntriesForDate
+} from './dayDetailUtils';
 
 interface DayDetailPanelProps {
   entries: EntriesByDate;
-  onEntriesChange: (entries: EntriesByDate) => void;
+  onPersistEntries: (
+    entries: EntriesByDate,
+    options?: {
+      selectedDate?: string;
+      visibleMonth?: string;
+    }
+  ) => Promise<{ error?: string; ok: boolean }>;
+  onSelectDate: (dateKey: string) => void;
   projects: Project[];
   selectedDate: string;
 }
@@ -17,25 +30,40 @@ interface DayDetailPanelProps {
 type PopupState =
   | {
       entryId: string;
+      initialProjectId?: string;
       initialText: string;
       kind: 'note';
       label: string;
     }
   | {
       entryId: string;
+      initialProjectId?: string;
       initialText: string;
       kind: 'task';
       label: string;
     };
 
+type StatusTone = 'error' | 'success';
+
+interface EntryDraft {
+  projectId?: string;
+  text: string;
+}
+
+interface PopupDraft extends EntryDraft {
+  targetDate: string;
+}
+
 export default function DayDetailPanel({
   entries,
-  onEntriesChange,
+  onPersistEntries,
+  onSelectDate,
   projects,
   selectedDate
 }: DayDetailPanelProps) {
   const [popupState, setPopupState] = useState<PopupState | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<StatusTone>('success');
 
   const selectedEntry = entries[selectedDate];
   const notes = selectedEntry?.notes ?? [];
@@ -62,112 +90,150 @@ export default function DayDetailPanel({
       return undefined;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      setStatusMessage(null);
-    }, 2200);
+    const timeoutId = window.setTimeout(
+      () => {
+        setStatusMessage(null);
+      },
+      statusTone === 'error' ? 4200 : 2400
+    );
 
     return () => window.clearTimeout(timeoutId);
-  }, [statusMessage]);
+  }, [statusMessage, statusTone]);
 
   useEffect(() => {
     setPopupState(null);
   }, [selectedDate]);
 
-  const commitEntries = (updater: (currentEntries: EntriesByDate) => EntriesByDate, message: string) => {
-    onEntriesChange(updater(entries));
-    setStatusMessage(message);
+  const persistEntries = async (
+    nextEntries: EntriesByDate,
+    successMessage: string,
+    options?: {
+      errorMessage?: string;
+      selectedDate?: string;
+    }
+  ) => {
+    const nextSelectedDate = options?.selectedDate;
+    const result = await onPersistEntries(nextEntries, {
+      selectedDate: nextSelectedDate ?? selectedDate,
+      visibleMonth: (nextSelectedDate ?? selectedDate).slice(0, 7)
+    });
+
+    if (!result.ok) {
+      setStatusTone('error');
+      setStatusMessage(result.error ?? options?.errorMessage ?? 'Unable to save the current changes.');
+      throw new Error(result.error ?? options?.errorMessage ?? 'Unable to save the current changes.');
+    }
+
+    if (nextSelectedDate && nextSelectedDate !== selectedDate) {
+      onSelectDate(nextSelectedDate);
+    }
+
+    setStatusTone('success');
+    setStatusMessage(successMessage);
   };
 
-  const handleAddNote = (text: string) => {
-    commitEntries(
-      (currentEntries) =>
-        updateEntriesForDate(currentEntries, selectedDate, (entry) => ({
-          ...entry,
-          notes: [...entry.notes, createNote(text)]
-        })),
+  const handleAddNote = async ({ projectId, text }: EntryDraft) => {
+    await persistEntries(
+      updateEntriesForDate(entries, selectedDate, (entry) => ({
+        ...entry,
+        notes: [...entry.notes, createNote(text, projectId)]
+      })),
       'Note added to the selected day.'
     );
   };
 
-  const handleUpdateNote = (noteId: string, text: string) => {
-    commitEntries(
-      (currentEntries) =>
-        updateEntriesForDate(currentEntries, selectedDate, (entry) => ({
-          ...entry,
-          notes: entry.notes.map((note) =>
-            note.id === noteId
-              ? {
-                  ...note,
-                  text,
-                  updatedAt: new Date().toISOString()
-                }
-              : note
-          )
-        })),
+  const handleUpdateNote = async (noteId: string, { projectId, text }: EntryDraft) => {
+    await persistEntries(
+      upsertItemInEntries(entries, selectedDate, 'notes', noteId, selectedDate, (note: Note) => ({
+        ...note,
+        projectId,
+        text,
+        updatedAt: new Date().toISOString()
+      })),
       'Note updated.'
     );
   };
 
-  const handleAddTask = (text: string) => {
-    commitEntries(
-      (currentEntries) =>
-        updateEntriesForDate(currentEntries, selectedDate, (entry) => ({
-          ...entry,
-          tasks: [...entry.tasks, createTask(text)]
-        })),
+  const handleDeleteNote = async (noteId: string) => {
+    await persistEntries(
+      removeItemFromEntries(entries, selectedDate, 'notes', noteId),
+      'Note deleted from the selected day.'
+    );
+  };
+
+  const handleAddTask = async ({ projectId, text }: EntryDraft) => {
+    await persistEntries(
+      updateEntriesForDate(entries, selectedDate, (entry) => ({
+        ...entry,
+        tasks: [...entry.tasks, createTask(text, projectId)]
+      })),
       'Task added to the selected day.'
     );
   };
 
-  const handleUpdateTask = (taskId: string, text: string) => {
-    commitEntries(
-      (currentEntries) =>
-        updateEntriesForDate(currentEntries, selectedDate, (entry) => ({
-          ...entry,
-          tasks: entry.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  text,
-                  updatedAt: new Date().toISOString()
-                }
-              : task
-          )
-        })),
+  const handleUpdateTask = async (taskId: string, { projectId, text }: EntryDraft) => {
+    await persistEntries(
+      upsertItemInEntries(entries, selectedDate, 'tasks', taskId, selectedDate, (task: Task) => ({
+        ...task,
+        projectId,
+        text,
+        updatedAt: new Date().toISOString()
+      })),
       'Task updated.'
     );
   };
 
-  const handleToggleTask = (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
+    await persistEntries(
+      removeItemFromEntries(entries, selectedDate, 'tasks', taskId),
+      'Task deleted from the selected day.'
+    );
+  };
+
+  const handleToggleTask = async (taskId: string) => {
     const nextTask = tasks.find((task) => task.id === taskId);
 
-    commitEntries(
-      (currentEntries) =>
-        updateEntriesForDate(currentEntries, selectedDate, (entry) => ({
-          ...entry,
-          tasks: entry.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  done: !task.done,
-                  updatedAt: new Date().toISOString()
-                }
-              : task
-          )
-        })),
+    await persistEntries(
+      upsertItemInEntries(entries, selectedDate, 'tasks', taskId, selectedDate, (task: Task) => ({
+        ...task,
+        done: !task.done,
+        updatedAt: new Date().toISOString()
+      })),
       nextTask?.done ? 'Task marked open again.' : 'Task completed.'
     );
   };
 
-  const handleSavePopup = (text: string) => {
+  const handleSavePopup = async ({ projectId, targetDate, text }: PopupDraft) => {
     if (!popupState) {
       return;
     }
 
     if (popupState.kind === 'note') {
-      handleUpdateNote(popupState.entryId, text);
+      await persistEntries(
+        upsertItemInEntries(entries, selectedDate, 'notes', popupState.entryId, targetDate, (note: Note) => ({
+          ...note,
+          projectId,
+          text,
+          updatedAt: new Date().toISOString()
+        })),
+        targetDate === selectedDate ? 'Note updated.' : `Note moved to ${formatLongDateLabel(targetDate)}.`,
+        {
+          selectedDate: targetDate
+        }
+      );
     } else {
-      handleUpdateTask(popupState.entryId, text);
+      await persistEntries(
+        upsertItemInEntries(entries, selectedDate, 'tasks', popupState.entryId, targetDate, (task: Task) => ({
+          ...task,
+          projectId,
+          text,
+          updatedAt: new Date().toISOString()
+        })),
+        targetDate === selectedDate ? 'Task updated.' : `Task moved to ${formatLongDateLabel(targetDate)}.`,
+        {
+          selectedDate: targetDate
+        }
+      );
     }
 
     setPopupState(null);
@@ -176,6 +242,7 @@ export default function DayDetailPanel({
   const openPopupForNote = (note: Note) => {
     setPopupState({
       entryId: note.id,
+      initialProjectId: note.projectId,
       initialText: note.text,
       kind: 'note',
       label: 'Selected note'
@@ -185,6 +252,7 @@ export default function DayDetailPanel({
   const openPopupForTask = (task: Task) => {
     setPopupState({
       entryId: task.id,
+      initialProjectId: task.projectId,
       initialText: task.text,
       kind: 'task',
       label: task.done ? 'Completed task' : 'Open task'
@@ -215,28 +283,35 @@ export default function DayDetailPanel({
       <NotesSection
         notes={notes}
         onAddNote={handleAddNote}
+        onDeleteNote={handleDeleteNote}
         onOpenPopup={openPopupForNote}
         onUpdateNote={handleUpdateNote}
+        projects={projects}
       />
 
       <TasksSection
         tasks={tasks}
         onAddTask={handleAddTask}
+        onDeleteTask={handleDeleteTask}
         onOpenPopup={openPopupForTask}
         onToggleTask={handleToggleTask}
         onUpdateTask={handleUpdateTask}
+        projects={projects}
       />
 
       <EntryPopupEditor
         entryLabel={popupState?.label ?? ''}
+        initialDate={selectedDate}
+        initialProjectId={popupState?.initialProjectId}
         initialText={popupState?.initialText ?? ''}
         isOpen={popupState !== null}
         kind={popupState?.kind ?? 'note'}
         onClose={() => setPopupState(null)}
         onSave={handleSavePopup}
+        projects={projects}
       />
 
-      <StatusToast message={statusMessage} />
+      <StatusToast message={statusMessage} tone={statusTone} />
 
       <section className="selected-day-panel__section" aria-label="Linked projects">
         <div className="selected-day-panel__section-header">

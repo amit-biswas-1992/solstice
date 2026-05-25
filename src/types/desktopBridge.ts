@@ -38,5 +38,6 @@ export type UnlockResult =
 export interface DailyNotesDesktopApi {
   readonly version: string;
   loadStore: () => Promise<StoreBootstrap>;
+  saveStore: (store: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>;
   unlock: (pin: string) => Promise<UnlockResult>;
 }
