@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isDateInMonth, moveDateKeyToMonth, shiftMonthKey } from '../../lib/date';
 import MonthGrid from '../calendar/MonthGrid';
-import SelectedDayPanel from './SelectedDayPanel';
+import DayDetailPanel from '../day/DayDetailPanel';
 import ProjectSidebar from '../projects/ProjectSidebar';
 import type { UnlockedStoreSnapshot } from '../../types/desktopBridge';
 
@@ -22,13 +22,18 @@ export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProp
   );
   const [visibleMonth, setVisibleMonth] = useState(storeSelection.visibleMonth);
   const [selectedDate, setSelectedDate] = useState(storeSelection.selectedDate);
+  const [entries, setEntries] = useState(store.entries);
 
   useEffect(() => {
     setVisibleMonth(storeSelection.visibleMonth);
     setSelectedDate(storeSelection.selectedDate);
   }, [storeSelection.selectedDate, storeSelection.visibleMonth]);
 
-  const selectedEntry = store.entries[selectedDate];
+  useEffect(() => {
+    setEntries(store.entries);
+  }, [store.entries]);
+
+  const selectedEntry = entries[selectedDate];
   const selectedNotes = selectedEntry?.notes.length ?? 0;
   const selectedTasks = selectedEntry?.tasks.length ?? 0;
   const projectLabel = `${store.projects.length} project${store.projects.length === 1 ? '' : 's'} loaded.`;
@@ -68,15 +73,20 @@ export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProp
         </header>
 
         <div className="workspace-shell__grid">
-          <ProjectSidebar entries={store.entries} projects={store.projects} selectedDate={selectedDate} />
+          <ProjectSidebar entries={entries} projects={store.projects} selectedDate={selectedDate} />
           <MonthGrid
-            entries={store.entries}
+            entries={entries}
             monthKey={visibleMonth}
             onNavigateMonth={handleNavigateMonth}
             onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
           />
-          <SelectedDayPanel entries={store.entries} projects={store.projects} selectedDate={selectedDate} />
+          <DayDetailPanel
+            entries={entries}
+            onEntriesChange={setEntries}
+            projects={store.projects}
+            selectedDate={selectedDate}
+          />
         </div>
       </section>
     </main>
