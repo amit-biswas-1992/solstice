@@ -1,7 +1,12 @@
 import { app, ipcMain } from 'electron';
-import { bootstrapStore } from '../storage/fileStore';
+import { readStore } from '../storage/fileStore';
 import { resolveAppDataStorePaths } from '../storage/appPaths';
-import type { StoreBootstrap, StoreSummary, UnlockResult } from '../../src/types/desktopBridge';
+import type {
+  StoreBootstrap,
+  StoreSummary,
+  UnlockResult,
+  UnlockedStoreSnapshot
+} from '../../src/types/desktopBridge';
 import type { StoreSnapshot } from '../../src/types/models';
 
 export const STORAGE_IPC_CHANNELS = {
@@ -18,9 +23,17 @@ const createStoreSummary = (store: StoreSnapshot): StoreSummary => ({
 
 const hasPin = (store: StoreSnapshot) => store.settings.pin.trim().length > 0;
 
-const loadBootstrapState = async (): Promise<StoreBootstrap> => {
-  const rootDir = resolveAppDataStorePaths(app.getPath('userData')).rootDir;
-  const store = await bootstrapStore(rootDir);
+const createUnlockedStoreSnapshot = (store: StoreSnapshot): UnlockedStoreSnapshot => ({
+  settings: {
+    lastOpenedMonth: store.settings.lastOpenedMonth,
+    lastSelectedDate: store.settings.lastSelectedDate
+  },
+  projects: store.projects,
+  entries: store.entries
+});
+
+export const loadBootstrapStateFromRoot = async (rootDir: string): Promise<StoreBootstrap> => {
+  const store = await readStore(rootDir);
   const pinRequired = hasPin(store);
 
   return {
@@ -29,18 +42,20 @@ const loadBootstrapState = async (): Promise<StoreBootstrap> => {
       isLocked: pinRequired
     },
     summary: createStoreSummary(store),
-    store: pinRequired ? undefined : store
+    store: pinRequired ? undefined : createUnlockedStoreSnapshot(store)
   };
 };
 
-const unlockStore = async (pin: string): Promise<UnlockResult> => {
-  const rootDir = resolveAppDataStorePaths(app.getPath('userData')).rootDir;
-  const store = await bootstrapStore(rootDir);
+export const unlockStoreAtRoot = async (
+  rootDir: string,
+  pin: string
+): Promise<UnlockResult> => {
+  const store = await readStore(rootDir);
 
   if (!hasPin(store) || store.settings.pin === pin) {
     return {
       ok: true,
-      store
+      store: createUnlockedStoreSnapshot(store)
     };
   }
 
@@ -54,6 +69,10 @@ export const registerStorageIpc = () => {
   ipcMain.removeHandler(STORAGE_IPC_CHANNELS.loadStore);
   ipcMain.removeHandler(STORAGE_IPC_CHANNELS.unlock);
 
-  ipcMain.handle(STORAGE_IPC_CHANNELS.loadStore, () => loadBootstrapState());
-  ipcMain.handle(STORAGE_IPC_CHANNELS.unlock, (_event, pin: string) => unlockStore(pin));
+  ipcMain.handle(STORAGE_IPC_CHANNELS.loadStore, () =>
+    loadBootstrapStateFromRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir)
+  );
+  ipcMain.handle(STORAGE_IPC_CHANNELS.unlock, (_event, pin: string) =>
+    unlockStoreAtRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir, pin)
+  );
 };

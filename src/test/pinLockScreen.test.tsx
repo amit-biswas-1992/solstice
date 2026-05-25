@@ -24,7 +24,6 @@ interface UnlockResult {
   message?: string;
   store?: {
     settings: {
-      pin: string;
       lastOpenedMonth: string;
       lastSelectedDate: string;
     };
@@ -58,7 +57,6 @@ describe('PinLockScreen bootstrap flow', () => {
         ok: true,
         store: {
           settings: {
-            pin: '4321',
             lastOpenedMonth: '2026-05',
             lastSelectedDate: '2026-05-25'
           },

@@ -1,4 +1,13 @@
-import type { StoreSnapshot } from './models';
+import type { EntriesByDate, Project } from './models';
+
+export interface UnlockedStoreSnapshot {
+  settings: {
+    lastOpenedMonth: string;
+    lastSelectedDate: string;
+  };
+  projects: Project[];
+  entries: EntriesByDate;
+}
 
 export interface StoreSummary {
   entryCount: number;
@@ -13,13 +22,13 @@ export interface StoreBootstrap {
     isLocked: boolean;
   };
   summary: StoreSummary;
-  store?: StoreSnapshot;
+  store?: UnlockedStoreSnapshot;
 }
 
 export type UnlockResult =
   | {
       ok: true;
-      store: StoreSnapshot;
+      store: UnlockedStoreSnapshot;
     }
   | {
       ok: false;

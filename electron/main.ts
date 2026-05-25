@@ -9,7 +9,7 @@ const createWindow = async () => {
     minWidth: 1200,
     minHeight: 760,
     webPreferences: {
-      preload: path.join(app.getAppPath(), 'dist-electron/preload.js')
+      preload: path.join(app.getAppPath(), 'dist-electron/electron/preload.js')
     }
   });
 

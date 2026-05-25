@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import PinLockScreen from './components/auth/PinLockScreen';
-import type { StoreBootstrap } from './types/desktopBridge';
-import type { StoreSnapshot } from './types/models';
+import type { StoreBootstrap, UnlockedStoreSnapshot } from './types/desktopBridge';
 
 export default function App() {
   const [bootstrap, setBootstrap] = useState<StoreBootstrap | null>(null);
-  const [store, setStore] = useState<StoreSnapshot | null>(null);
+  const [store, setStore] = useState<UnlockedStoreSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [isUnlocking, setIsUnlocking] = useState(false);
