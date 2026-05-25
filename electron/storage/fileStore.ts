@@ -327,6 +327,18 @@ const preserveMalformedFileBackup = async (filePath: string, source: string) => 
   }
 };
 
+const preserveFileBackupIfPresent = async (filePath: string) => {
+  try {
+    const source = await fs.readFile(filePath, 'utf8');
+    await preserveMalformedFileBackup(filePath, source);
+    await fs.rm(filePath, { force: true });
+  } catch (error) {
+    if (isErrnoException(error) && error.code === 'ENOENT') {
+      return;
+    }
+  }
+};
+
 const parseJsonFile = async (filePath: string): Promise<unknown | undefined> => {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
@@ -372,6 +384,10 @@ const readCurrentManifest = async (rootDir: string): Promise<StoreManifest | nul
   return normalizeManifest(manifestValue);
 };
 
+const invalidateCurrentManifest = async (rootDir: string) => {
+  await preserveFileBackupIfPresent(resolveStorePaths(rootDir).currentFile);
+};
+
 const readCommittedStore = async (rootDir: string): Promise<StoreSnapshot | null> => {
   const manifest = await readCurrentManifest(rootDir);
   if (!manifest) {
@@ -379,11 +395,27 @@ const readCommittedStore = async (rootDir: string): Promise<StoreSnapshot | null
   }
 
   const snapshotPaths = resolveSnapshotPaths(rootDir, manifest.snapshotId);
-  return readStoreFiles(
-    snapshotPaths.settingsFile,
-    snapshotPaths.projectsFile,
-    snapshotPaths.entriesFile
-  );
+  const [settingsValue, projectsValue, entriesValue] = await Promise.all([
+    parseJsonFile(snapshotPaths.settingsFile),
+    parseJsonFile(snapshotPaths.projectsFile),
+    parseJsonFile(snapshotPaths.entriesFile)
+  ]);
+
+  if (
+    settingsValue === undefined ||
+    projectsValue === undefined ||
+    entriesValue === undefined
+  ) {
+    await invalidateCurrentManifest(rootDir);
+    return null;
+  }
+
+  const defaults = createDefaultStoreSnapshot();
+  return {
+    settings: normalizeSettings(settingsValue, defaults.settings),
+    projects: normalizeProjects(projectsValue),
+    entries: normalizeEntries(entriesValue)
+  };
 };
 
 const removeDirectoryIfExists = async (dirPath: string) => {

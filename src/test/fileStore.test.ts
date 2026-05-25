@@ -235,4 +235,103 @@ describe('fileStore', () => {
 
     await expect(readStore(root)).resolves.toMatchObject(secondStore);
   });
+
+  it('ignores a stale manifest that points to a missing snapshot', async () => {
+    const root = await createRoot('stale-manifest');
+
+    await fs.writeFile(
+      path.join(root, 'current.json'),
+      JSON.stringify({ snapshotId: 'missing-snapshot' }, null, 2),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(root, 'settings.json'),
+      JSON.stringify(
+        {
+          pin: '5555',
+          lastOpenedMonth: '2026-07',
+          lastSelectedDate: '2026-07-04'
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    await expect(readStore(root)).resolves.toMatchObject({
+      settings: {
+        pin: '5555',
+        lastOpenedMonth: '2026-07',
+        lastSelectedDate: '2026-07-04'
+      },
+      projects: [],
+      entries: {}
+    });
+
+    const staleManifestFiles = await fs.readdir(root);
+    expect(staleManifestFiles).not.toContain('current.json');
+    expect(
+      staleManifestFiles.some(
+        (file) => file.startsWith('current.json.bak.') && file.endsWith('.json')
+      )
+    ).toBe(true);
+
+    const bootstrapped = await bootstrapStore(root);
+    const manifest = JSON.parse(await fs.readFile(path.join(root, 'current.json'), 'utf8')) as {
+      snapshotId: string;
+    };
+
+    expect(bootstrapped.settings.pin).toBe('5555');
+    expect(manifest.snapshotId).not.toBe('missing-snapshot');
+    await expect(
+      fs.readFile(path.join(root, 'snapshots', manifest.snapshotId, 'settings.json'), 'utf8')
+    ).resolves.toContain('"pin": "5555"');
+  });
+
+  it('ignores an incomplete snapshot referenced by current.json', async () => {
+    const root = await createRoot('incomplete-snapshot');
+    const snapshotId = 'broken-snapshot';
+    const snapshotRoot = path.join(root, 'snapshots', snapshotId);
+
+    await fs.mkdir(snapshotRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(root, 'current.json'),
+      JSON.stringify({ snapshotId }, null, 2),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(snapshotRoot, 'settings.json'),
+      JSON.stringify(
+        {
+          pin: '9999',
+          lastOpenedMonth: '2026-08',
+          lastSelectedDate: '2026-08-09'
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(root, 'projects.json'),
+      JSON.stringify(createStore().projects, null, 2),
+      'utf8'
+    );
+
+    await expect(readStore(root)).resolves.toMatchObject({
+      settings: {
+        pin: '1234'
+      },
+      projects: createStore().projects,
+      entries: {}
+    });
+
+    const incompleteManifestFiles = await fs.readdir(root);
+    expect(incompleteManifestFiles).not.toContain('current.json');
+    expect(
+      incompleteManifestFiles.some(
+        (file) => file.startsWith('current.json.bak.') && file.endsWith('.json')
+      )
+    ).toBe(true);
+  });
 });
