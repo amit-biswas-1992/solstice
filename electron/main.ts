@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { registerStorageIpc } from './ipc/storageIpc';
 
 const createWindow = async () => {
   const window = new BrowserWindow({
@@ -22,7 +23,10 @@ const createWindow = async () => {
   await window.loadFile(path.join(app.getAppPath(), 'dist/index.html'));
 };
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  registerStorageIpc();
+  await createWindow();
+});
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
