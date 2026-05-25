@@ -5,6 +5,7 @@ import DayCard from './DayCard';
 interface MonthGridProps {
   entries: EntriesByDate;
   monthKey: string;
+  onNavigateMonth: (offset: number) => void;
   onSelectDate: (dateKey: string) => void;
   selectedDate: string;
   todayDateKey?: string;
@@ -13,6 +14,7 @@ interface MonthGridProps {
 export default function MonthGrid({
   entries,
   monthKey,
+  onNavigateMonth,
   onSelectDate,
   selectedDate,
   todayDateKey
@@ -30,9 +32,29 @@ export default function MonthGrid({
           <p className="workspace-panel__eyebrow">Open month</p>
           <h2 id="month-grid-title">{formatMonthLabel(monthKey)}</h2>
         </div>
-        <div className="workspace-panel__meta">
-          <span>{activeDayCount} active days</span>
-          <span>{formatDateLabel(selectedDate)}</span>
+        <div className="month-grid__toolbar">
+          <div className="workspace-panel__meta">
+            <span>{activeDayCount} active days</span>
+            <span>{formatDateLabel(selectedDate)}</span>
+          </div>
+          <div className="month-grid__controls" aria-label="Month navigation">
+            <button
+              type="button"
+              className="month-grid__nav-button"
+              aria-label="Previous month"
+              onClick={() => onNavigateMonth(-1)}
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              className="month-grid__nav-button"
+              aria-label="Next month"
+              onClick={() => onNavigateMonth(1)}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </header>
 

@@ -42,6 +42,8 @@ export const createDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+export const createMonthKey = (date: Date) => createDateKey(date).slice(0, 7);
+
 export const parseMonthKey = (monthKey: string) => {
   if (!MONTH_KEY_PATTERN.test(monthKey)) {
     throw new Error(`Invalid month key: ${monthKey}`);
@@ -79,6 +81,23 @@ export const parseDateKey = (dateKey: string) => {
 export const getMonthKey = (dateKey: string) => dateKey.slice(0, 7);
 
 export const isDateInMonth = (dateKey: string, monthKey: string) => getMonthKey(dateKey) === monthKey;
+
+export const getDaysInMonth = (monthKey: string) => {
+  const firstOfMonth = parseMonthKey(monthKey);
+  return new Date(firstOfMonth.getFullYear(), firstOfMonth.getMonth() + 1, 0).getDate();
+};
+
+export const shiftMonthKey = (monthKey: string, offset: number) => {
+  const firstOfMonth = parseMonthKey(monthKey);
+  return createMonthKey(new Date(firstOfMonth.getFullYear(), firstOfMonth.getMonth() + offset, 1, 12));
+};
+
+export const moveDateKeyToMonth = (dateKey: string, monthKey: string) => {
+  const date = parseDateKey(dateKey);
+  const month = parseMonthKey(monthKey);
+  const day = Math.min(date.getDate(), getDaysInMonth(monthKey));
+  return createDateKey(new Date(month.getFullYear(), month.getMonth(), day, 12));
+};
 
 export const formatMonthLabel = (monthKey: string) => monthLabelFormatter.format(parseMonthKey(monthKey));
 

@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { isDateInMonth, moveDateKeyToMonth, shiftMonthKey } from '../../lib/date';
 import MonthGrid from '../calendar/MonthGrid';
+import SelectedDayPanel from './SelectedDayPanel';
 import ProjectSidebar from '../projects/ProjectSidebar';
 import type { UnlockedStoreSnapshot } from '../../types/desktopBridge';
 
@@ -9,12 +11,32 @@ interface WorkspaceShellProps {
 }
 
 export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProps) {
-  const [selectedDate, setSelectedDate] = useState(store.settings.lastSelectedDate);
+  const [visibleMonth, setVisibleMonth] = useState(store.settings.lastOpenedMonth);
+  const [selectedDate, setSelectedDate] = useState(() =>
+    isDateInMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
+      ? store.settings.lastSelectedDate
+      : moveDateKeyToMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
+  );
 
   const selectedEntry = store.entries[selectedDate];
   const selectedNotes = selectedEntry?.notes.length ?? 0;
   const selectedTasks = selectedEntry?.tasks.length ?? 0;
   const projectLabel = `${store.projects.length} project${store.projects.length === 1 ? '' : 's'} loaded.`;
+
+  const handleSelectDate = (dateKey: string) => {
+    setSelectedDate(dateKey);
+    if (!isDateInMonth(dateKey, visibleMonth)) {
+      setVisibleMonth(dateKey.slice(0, 7));
+    }
+  };
+
+  const handleNavigateMonth = (offset: number) => {
+    setVisibleMonth((currentMonth) => {
+      const nextMonth = shiftMonthKey(currentMonth, offset);
+      setSelectedDate((currentDate) => moveDateKeyToMonth(currentDate, nextMonth));
+      return nextMonth;
+    });
+  };
 
   return (
     <main className="workspace-shell">
@@ -39,10 +61,12 @@ export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProp
           <ProjectSidebar entries={store.entries} projects={store.projects} selectedDate={selectedDate} />
           <MonthGrid
             entries={store.entries}
-            monthKey={store.settings.lastOpenedMonth}
-            onSelectDate={setSelectedDate}
+            monthKey={visibleMonth}
+            onNavigateMonth={handleNavigateMonth}
+            onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
           />
+          <SelectedDayPanel entries={store.entries} projects={store.projects} selectedDate={selectedDate} />
         </div>
       </section>
     </main>
