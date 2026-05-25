@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { formatLongDateLabel } from '../../lib/date';
 import type { EntriesByDate, Project } from '../../types/models';
 
@@ -15,16 +16,21 @@ export default function SelectedDayPanel({
   const selectedEntry = entries[selectedDate];
   const notes = selectedEntry?.notes ?? [];
   const tasks = selectedEntry?.tasks ?? [];
-  const linkedProjectIds = Array.from(
-    new Set(
+  const projectById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects]
+  );
+  const linkedProjects = useMemo(() => {
+    const linkedProjectIds = new Set(
       [...notes, ...tasks]
         .map((item) => item.projectId)
         .filter((projectId): projectId is string => Boolean(projectId))
-    )
-  );
-  const linkedProjects = linkedProjectIds
-    .map((projectId) => projects.find((project) => project.id === projectId))
-    .filter((project): project is Project => Boolean(project));
+    );
+
+    return Array.from(linkedProjectIds)
+      .map((projectId) => projectById.get(projectId))
+      .filter((project): project is Project => Boolean(project));
+  }, [notes, tasks, projectById]);
 
   return (
     <aside className="workspace-panel selected-day-panel" aria-labelledby="selected-day-panel-title">
@@ -57,7 +63,9 @@ export default function SelectedDayPanel({
         ) : (
           <ul className="selected-day-panel__list">
             {notes.map((note) => (
-              <li key={note.id}>{note.text}</li>
+              <li key={note.id}>
+                <span className="selected-day-panel__item-text">{note.text}</span>
+              </li>
             ))}
           </ul>
         )}
@@ -74,8 +82,8 @@ export default function SelectedDayPanel({
           <ul className="selected-day-panel__list">
             {tasks.map((task) => (
               <li key={task.id}>
-                <span>{task.text}</span>
-                <strong>{task.done ? 'Done' : 'Open'}</strong>
+                <span className="selected-day-panel__item-text">{task.text}</span>
+                <strong className="selected-day-panel__item-status">{task.done ? 'Done' : 'Open'}</strong>
               </li>
             ))}
           </ul>
@@ -98,7 +106,7 @@ export default function SelectedDayPanel({
                   style={{ backgroundColor: project.color ?? '#1f4e79' }}
                   aria-hidden="true"
                 />
-                <span>{project.name}</span>
+                <span className="selected-day-panel__project-name">{project.name}</span>
               </li>
             ))}
           </ul>

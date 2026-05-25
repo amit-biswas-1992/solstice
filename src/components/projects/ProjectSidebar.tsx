@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { EntriesByDate, Project } from '../../types/models';
 
 interface ProjectSidebarProps {
@@ -8,26 +9,42 @@ interface ProjectSidebarProps {
 
 const FALLBACK_SWATCHES = ['#1f4e79', '#8c5e34', '#2f6b5f', '#905a2a', '#5b4d9d'];
 
-const getProjectUsage = (entries: EntriesByDate, projectId: string) => {
-  let linkedItems = 0;
-
-  Object.values(entries).forEach((entry) => {
-    linkedItems += entry.notes.filter((note) => note.projectId === projectId).length;
-    linkedItems += entry.tasks.filter((task) => task.projectId === projectId).length;
-  });
-
-  return linkedItems;
-};
-
 export default function ProjectSidebar({ entries, projects, selectedDate }: ProjectSidebarProps) {
   const selectedEntry = entries[selectedDate];
-  const selectedProjectIds = new Set(
-    [...(selectedEntry?.notes ?? []), ...(selectedEntry?.tasks ?? [])]
-      .map((item) => item.projectId)
-      .filter((projectId): projectId is string => Boolean(projectId))
+  const selectedProjectIds = useMemo(
+    () =>
+      new Set(
+        [...(selectedEntry?.notes ?? []), ...(selectedEntry?.tasks ?? [])]
+          .map((item) => item.projectId)
+          .filter((projectId): projectId is string => Boolean(projectId))
+      ),
+    [selectedEntry]
   );
+  const { activeDays, projectUsageById } = useMemo(() => {
+    const usageById = new Map<string, number>();
+    let nextActiveDays = 0;
 
-  const activeDays = Object.values(entries).filter((entry) => entry.notes.length + entry.tasks.length > 0).length;
+    Object.values(entries).forEach((entry) => {
+      const items = [...entry.notes, ...entry.tasks];
+
+      if (items.length > 0) {
+        nextActiveDays += 1;
+      }
+
+      items.forEach((item) => {
+        if (!item.projectId) {
+          return;
+        }
+
+        usageById.set(item.projectId, (usageById.get(item.projectId) ?? 0) + 1);
+      });
+    });
+
+    return {
+      activeDays: nextActiveDays,
+      projectUsageById: usageById
+    };
+  }, [entries]);
   const selectedNotes = selectedEntry?.notes.length ?? 0;
   const selectedTasks = selectedEntry?.tasks.length ?? 0;
 
@@ -60,7 +77,7 @@ export default function ProjectSidebar({ entries, projects, selectedDate }: Proj
           <p className="project-sidebar__empty">No projects yet. Add one to start organizing days.</p>
         ) : (
           projects.map((project, index) => {
-            const linkedItems = getProjectUsage(entries, project.id);
+            const linkedItems = projectUsageById.get(project.id) ?? 0;
             const isSelected = selectedProjectIds.has(project.id);
 
             return (
@@ -76,10 +93,12 @@ export default function ProjectSidebar({ entries, projects, selectedDate }: Proj
                 />
                 <div className="project-sidebar__content">
                   <div className="project-sidebar__row">
-                    <h3>{project.name}</h3>
+                    <h3 className="project-sidebar__title">{project.name}</h3>
                     {isSelected ? <span className="project-sidebar__pill">Selected day</span> : null}
                   </div>
-                  <p>{linkedItems} linked item{linkedItems === 1 ? '' : 's'}</p>
+                  <p className="project-sidebar__meta">
+                    {linkedItems} linked item{linkedItems === 1 ? '' : 's'}
+                  </p>
                 </div>
               </article>
             );

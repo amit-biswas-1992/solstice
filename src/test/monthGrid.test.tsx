@@ -143,4 +143,30 @@ describe('Workspace month grid', () => {
     expect(screen.getByRole('grid', { name: 'May 2026' })).toBeInTheDocument();
     expect(screen.getByText('Selected date: 2026-05-25')).toBeInTheDocument();
   });
+
+  it('resyncs local month and selected-day state when the parent store snapshot changes', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<WorkspaceShell appVersion="0.1.0" store={store} />);
+
+    await user.click(screen.getByRole('button', { name: /next month/i }));
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeInTheDocument();
+    expect(screen.getByText('Selected date: 2026-06-25')).toBeInTheDocument();
+
+    rerender(
+      <WorkspaceShell
+        appVersion="0.1.0"
+        store={{
+          ...store,
+          settings: {
+            lastOpenedMonth: '2026-04',
+            lastSelectedDate: '2026-04-25'
+          }
+        }}
+      />
+    );
+
+    expect(screen.getByRole('grid', { name: 'April 2026' })).toBeInTheDocument();
+    expect(screen.getByText('Selected date: 2026-04-25')).toBeInTheDocument();
+    expect(screen.getByText(/archive review/i)).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { isDateInMonth, moveDateKeyToMonth, shiftMonthKey } from '../../lib/date';
 import MonthGrid from '../calendar/MonthGrid';
 import SelectedDayPanel from './SelectedDayPanel';
@@ -11,12 +11,22 @@ interface WorkspaceShellProps {
 }
 
 export default function WorkspaceShell({ appVersion, store }: WorkspaceShellProps) {
-  const [visibleMonth, setVisibleMonth] = useState(store.settings.lastOpenedMonth);
-  const [selectedDate, setSelectedDate] = useState(() =>
-    isDateInMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
-      ? store.settings.lastSelectedDate
-      : moveDateKeyToMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
+  const storeSelection = useMemo(
+    () => ({
+      visibleMonth: store.settings.lastOpenedMonth,
+      selectedDate: isDateInMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
+        ? store.settings.lastSelectedDate
+        : moveDateKeyToMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
+    }),
+    [store.settings.lastOpenedMonth, store.settings.lastSelectedDate]
   );
+  const [visibleMonth, setVisibleMonth] = useState(storeSelection.visibleMonth);
+  const [selectedDate, setSelectedDate] = useState(storeSelection.selectedDate);
+
+  useEffect(() => {
+    setVisibleMonth(storeSelection.visibleMonth);
+    setSelectedDate(storeSelection.selectedDate);
+  }, [storeSelection.selectedDate, storeSelection.visibleMonth]);
 
   const selectedEntry = store.entries[selectedDate];
   const selectedNotes = selectedEntry?.notes.length ?? 0;

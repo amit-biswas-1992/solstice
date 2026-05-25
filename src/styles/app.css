@@ -297,6 +297,16 @@ body {
   color: #1c2833;
 }
 
+.project-sidebar__title,
+.project-sidebar__meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-sidebar__title {
+  flex: 1 1 auto;
+}
+
 .project-sidebar__pill {
   padding: 5px 8px;
   border-radius: 999px;
@@ -304,6 +314,7 @@ body {
   color: #1f4e79;
   font-size: 0.72rem;
   font-weight: 700;
+  flex-shrink: 0;
   white-space: nowrap;
 }
 
@@ -527,6 +538,21 @@ body {
 .selected-day-panel__list strong {
   font-size: 0.78rem;
   color: #1f4e79;
+}
+
+.selected-day-panel__item-text,
+.selected-day-panel__project-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.selected-day-panel__item-text {
+  flex: 1 1 auto;
+}
+
+.selected-day-panel__item-status {
+  flex-shrink: 0;
+  text-align: right;
 }
 
 .selected-day-panel__project-list li {
