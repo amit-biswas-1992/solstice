@@ -1,5 +1,8 @@
 import { contextBridge } from 'electron';
+import type { DailyNotesDesktopApi } from '../src/types/desktopBridge';
 
-contextBridge.exposeInMainWorld('dailyNotesDesktop', {
+const api: DailyNotesDesktopApi = {
   version: '0.1.0'
-});
+};
+
+contextBridge.exposeInMainWorld('dailyNotesDesktop', api);

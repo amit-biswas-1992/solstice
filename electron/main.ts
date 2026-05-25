@@ -13,7 +13,7 @@ const createWindow = async () => {
   });
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) {
+  if (!app.isPackaged && devUrl) {
     await window.loadURL(devUrl);
     window.webContents.openDevTools({ mode: 'detach' });
     return;

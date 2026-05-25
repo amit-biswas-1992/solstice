@@ -8,6 +8,7 @@ export default function App() {
           Task 1 scaffold is in place and ready for the storage, auth, and
           workspace tasks that follow.
         </p>
+        <p className="build-tag">Bridge v{window.dailyNotesDesktop.version}</p>
       </section>
     </main>
   );
