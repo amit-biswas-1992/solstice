@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   bootstrapStore,
   readStore,
@@ -15,6 +15,47 @@ const createRoot = async (name: string) => {
   testRoots.push(root);
   return root;
 };
+
+const createStore = (overrides?: Partial<Awaited<ReturnType<typeof readStore>>>) => ({
+  settings: {
+    pin: '4321',
+    lastOpenedMonth: '2026-05',
+    lastSelectedDate: '2026-05-25'
+  },
+  projects: [
+    {
+      id: 'p1',
+      name: 'Alpha',
+      color: '#7BC7A6',
+      createdAt: '2026-05-25T10:00:00.000Z',
+      updatedAt: '2026-05-25T10:00:00.000Z'
+    }
+  ],
+  entries: {
+    '2026-05-25': {
+      notes: [
+        {
+          id: 'n1',
+          text: 'Draft launch checklist',
+          projectId: 'p1',
+          createdAt: '2026-05-25T10:00:00.000Z',
+          updatedAt: '2026-05-25T10:00:00.000Z'
+        }
+      ],
+      tasks: [
+        {
+          id: 't1',
+          text: 'Ship storage layer',
+          projectId: 'p1',
+          done: false,
+          createdAt: '2026-05-25T10:00:00.000Z',
+          updatedAt: '2026-05-25T10:00:00.000Z'
+        }
+      ]
+    }
+  },
+  ...overrides
+});
 
 afterEach(async () => {
   await Promise.all(
@@ -37,45 +78,7 @@ describe('fileStore', () => {
   it('round-trips settings, projects, and entries', async () => {
     const root = await createRoot('roundtrip');
 
-    await writeStore(root, {
-      settings: {
-        pin: '4321',
-        lastOpenedMonth: '2026-05',
-        lastSelectedDate: '2026-05-25'
-      },
-      projects: [
-        {
-          id: 'p1',
-          name: 'Alpha',
-          color: '#7BC7A6',
-          createdAt: '2026-05-25T10:00:00.000Z',
-          updatedAt: '2026-05-25T10:00:00.000Z'
-        }
-      ],
-      entries: {
-        '2026-05-25': {
-          notes: [
-            {
-              id: 'n1',
-              text: 'Draft launch checklist',
-              projectId: 'p1',
-              createdAt: '2026-05-25T10:00:00.000Z',
-              updatedAt: '2026-05-25T10:00:00.000Z'
-            }
-          ],
-          tasks: [
-            {
-              id: 't1',
-              text: 'Ship storage layer',
-              projectId: 'p1',
-              done: false,
-              createdAt: '2026-05-25T10:00:00.000Z',
-              updatedAt: '2026-05-25T10:00:00.000Z'
-            }
-          ]
-        }
-      }
-    });
+    await writeStore(root, createStore());
 
     const store = await readStore(root);
 
@@ -135,7 +138,101 @@ describe('fileStore', () => {
     const bootstrapped = await bootstrapStore(root);
 
     expect(bootstrapped.settings.pin).toBe('1234');
+    const manifest = JSON.parse(await fs.readFile(path.join(root, 'current.json'), 'utf8')) as {
+      snapshotId: string;
+    };
+    const committedSettingsPath = path.join(root, 'snapshots', manifest.snapshotId, 'settings.json');
 
-    await expect(fs.readFile(path.join(root, 'settings.json'), 'utf8')).resolves.toContain('"pin": "1234"');
+    await expect(fs.readFile(committedSettingsPath, 'utf8')).resolves.toContain('"pin": "1234"');
+  });
+
+  it('rejects invalid in-memory data instead of silently dropping it', async () => {
+    const root = await createRoot('invalid-write');
+
+    await expect(
+      writeStore(
+        root,
+        createStore({
+          projects: [
+            {
+              id: 'p1',
+              name: 'Broken',
+              createdAt: '2026-05-25T10:00:00.000Z'
+            }
+          ] as never
+        })
+      )
+    ).rejects.toThrow(/invalid project/i);
+
+    await expect(fs.readdir(root)).resolves.toEqual([]);
+  });
+
+  it('keeps the previously committed snapshot visible when a commit fails', async () => {
+    const root = await createRoot('atomic-commit');
+    const initialStore = createStore();
+    const nextStore = createStore({
+      settings: {
+        pin: '8765',
+        lastOpenedMonth: '2026-06',
+        lastSelectedDate: '2026-06-01'
+      }
+    });
+
+    await writeStore(root, initialStore);
+
+    const originalRename = fs.rename.bind(fs);
+    const renameSpy = vi.spyOn(fs, 'rename').mockImplementation(async (source, target) => {
+      if (String(target).endsWith('current.json')) {
+        throw new Error('simulated commit failure');
+      }
+
+      return originalRename(source, target);
+    });
+
+    await expect(writeStore(root, nextStore)).rejects.toThrow('simulated commit failure');
+    renameSpy.mockRestore();
+
+    await expect(readStore(root)).resolves.toMatchObject(initialStore);
+  });
+
+  it('serializes overlapping writes for the same root', async () => {
+    const root = await createRoot('concurrent');
+    const firstStore = createStore({
+      settings: {
+        pin: '1111',
+        lastOpenedMonth: '2026-05',
+        lastSelectedDate: '2026-05-25'
+      }
+    });
+    const secondStore = createStore({
+      settings: {
+        pin: '2222',
+        lastOpenedMonth: '2026-06',
+        lastSelectedDate: '2026-06-02'
+      }
+    });
+
+    const originalWriteFile = fs.writeFile.bind(fs);
+    let delayedFirstSettingsWrite = false;
+    const writeSpy = vi.spyOn(fs, 'writeFile').mockImplementation(async (file, data, options) => {
+      const text = typeof data === 'string' ? data : data.toString();
+
+      if (
+        !delayedFirstSettingsWrite &&
+        String(file).includes('/snapshots/') &&
+        String(file).endsWith('/settings.json') &&
+        text.includes('"pin": "1111"')
+      ) {
+        delayedFirstSettingsWrite = true;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      return originalWriteFile(file, data, options as never);
+    });
+
+    await Promise.all([writeStore(root, firstStore), writeStore(root, secondStore)]);
+    writeSpy.mockRestore();
+
+    await expect(readStore(root)).resolves.toMatchObject(secondStore);
   });
 });

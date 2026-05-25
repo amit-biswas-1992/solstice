@@ -1,5 +1,6 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import { resolveStorePaths } from './appPaths';
+import { resolveSnapshotPaths, resolveStorePaths } from './appPaths';
 import type {
   DayEntry,
   EntriesByDate,
@@ -9,6 +10,12 @@ import type {
   StoreSnapshot,
   Task
 } from '../../src/types/models';
+
+interface StoreManifest {
+  snapshotId: string;
+}
+
+const rootWriteQueues = new Map<string, Promise<void>>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -32,6 +39,39 @@ export const createDefaultStoreSnapshot = (now?: Date): StoreSnapshot => ({
   projects: [],
   entries: {}
 });
+
+const createSnapshotId = () => `${Date.now()}-${crypto.randomUUID()}`;
+
+const createTempFilePath = (filePath: string) => `${filePath}.tmp.${crypto.randomUUID()}`;
+
+const createBackupFilePath = (filePath: string) => {
+  const timestamp = new Date().toISOString().replaceAll(':', '-');
+  return `${filePath}.bak.${timestamp}.${crypto.randomUUID()}.json`;
+};
+
+const waitForRootWriteTurn = async (rootDir: string) => {
+  const previous = rootWriteQueues.get(rootDir);
+  if (previous) {
+    await previous;
+  }
+
+  let release!: () => void;
+  const turn = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  rootWriteQueues.set(rootDir, turn);
+
+  return () => {
+    if (rootWriteQueues.get(rootDir) === turn) {
+      rootWriteQueues.delete(rootDir);
+    }
+    release();
+  };
+};
+
+const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
+  error instanceof Error;
 
 const normalizeSettings = (value: unknown, fallback: Settings): Settings => {
   if (!isRecord(value)) {
@@ -143,9 +183,140 @@ const normalizeEntries = (value: unknown): EntriesByDate => {
   );
 };
 
-const createBackupFilePath = (filePath: string) => {
-  const timestamp = new Date().toISOString().replaceAll(':', '-');
-  return `${filePath}.bak.${timestamp}.json`;
+const assertSettings = (value: unknown, context: string): Settings => {
+  if (!isRecord(value)) {
+    throw new Error(`${context}: invalid settings object`);
+  }
+  if (!isString(value.pin)) {
+    throw new Error(`${context}: invalid settings.pin`);
+  }
+  if (!isString(value.lastOpenedMonth)) {
+    throw new Error(`${context}: invalid settings.lastOpenedMonth`);
+  }
+  if (!isString(value.lastSelectedDate)) {
+    throw new Error(`${context}: invalid settings.lastSelectedDate`);
+  }
+
+  return {
+    pin: value.pin,
+    lastOpenedMonth: value.lastOpenedMonth,
+    lastSelectedDate: value.lastSelectedDate
+  };
+};
+
+const assertProject = (value: unknown, index: number): Project => {
+  if (!isRecord(value)) {
+    throw new Error(`invalid project at index ${index}`);
+  }
+  if (!isString(value.id)) {
+    throw new Error(`invalid project at index ${index}: missing id`);
+  }
+  if (!isString(value.name)) {
+    throw new Error(`invalid project at index ${index}: missing name`);
+  }
+  if (!isString(value.createdAt)) {
+    throw new Error(`invalid project at index ${index}: missing createdAt`);
+  }
+  if (!isString(value.updatedAt)) {
+    throw new Error(`invalid project at index ${index}: missing updatedAt`);
+  }
+  if (value.color !== undefined && !isString(value.color)) {
+    throw new Error(`invalid project at index ${index}: invalid color`);
+  }
+
+  return {
+    id: value.id,
+    name: value.name,
+    color: value.color,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt
+  };
+};
+
+const assertNote = (value: unknown, context: string): Note => {
+  if (!isRecord(value)) {
+    throw new Error(`${context}: invalid note object`);
+  }
+  if (!isString(value.id)) {
+    throw new Error(`${context}: missing id`);
+  }
+  if (!isString(value.text)) {
+    throw new Error(`${context}: missing text`);
+  }
+  if (value.projectId !== undefined && !isString(value.projectId)) {
+    throw new Error(`${context}: invalid projectId`);
+  }
+  if (!isString(value.createdAt)) {
+    throw new Error(`${context}: missing createdAt`);
+  }
+  if (!isString(value.updatedAt)) {
+    throw new Error(`${context}: missing updatedAt`);
+  }
+
+  return {
+    id: value.id,
+    text: value.text,
+    projectId: value.projectId,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt
+  };
+};
+
+const assertTask = (value: unknown, context: string): Task => {
+  const note = assertNote(value, context);
+  if (!isRecord(value) || typeof value.done !== 'boolean') {
+    throw new Error(`${context}: invalid done flag`);
+  }
+
+  return {
+    ...note,
+    done: value.done
+  };
+};
+
+const assertEntries = (value: unknown): EntriesByDate => {
+  if (!isRecord(value)) {
+    throw new Error('invalid entries object');
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([date, entry]) => {
+      if (!isRecord(entry)) {
+        throw new Error(`invalid entry for date ${date}`);
+      }
+
+      const notes = Array.isArray(entry.notes)
+        ? entry.notes.map((note, index) => assertNote(note, `invalid note ${index} for date ${date}`))
+        : (() => {
+            throw new Error(`invalid notes collection for date ${date}`);
+          })();
+      const tasks = Array.isArray(entry.tasks)
+        ? entry.tasks.map((task, index) => assertTask(task, `invalid task ${index} for date ${date}`))
+        : (() => {
+            throw new Error(`invalid tasks collection for date ${date}`);
+          })();
+
+      return [date, { notes, tasks }];
+    })
+  );
+};
+
+const assertStoreSnapshot = (value: StoreSnapshot): StoreSnapshot => ({
+  settings: assertSettings(value.settings, 'invalid store'),
+  projects: Array.isArray(value.projects)
+    ? value.projects.map((project, index) => assertProject(project, index))
+    : (() => {
+        throw new Error('invalid store: projects must be an array');
+      })(),
+  entries: assertEntries(value.entries)
+});
+
+const normalizeManifest = (value: unknown): StoreManifest | null => {
+  if (!isRecord(value) || !isString(value.snapshotId)) {
+    return null;
+  }
+
+  return { snapshotId: value.snapshotId };
 };
 
 const preserveMalformedFileBackup = async (filePath: string, source: string) => {
@@ -167,8 +338,7 @@ const parseJsonFile = async (filePath: string): Promise<unknown | undefined> => 
       return undefined;
     }
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
+    if (isErrnoException(error) && error.code === 'ENOENT') {
       return undefined;
     }
 
@@ -177,18 +347,17 @@ const parseJsonFile = async (filePath: string): Promise<unknown | undefined> => 
 };
 
 const writeJsonFile = async (filePath: string, value: unknown) => {
-  const tempFilePath = `${filePath}.tmp`;
+  const tempFilePath = createTempFilePath(filePath);
   await fs.writeFile(tempFilePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
   await fs.rename(tempFilePath, filePath);
 };
 
-export const readStore = async (rootDir: string): Promise<StoreSnapshot> => {
+const readStoreFiles = async (settingsFile: string, projectsFile: string, entriesFile: string) => {
   const defaults = createDefaultStoreSnapshot();
-  const paths = resolveStorePaths(rootDir);
   const [settingsValue, projectsValue, entriesValue] = await Promise.all([
-    parseJsonFile(paths.settingsFile),
-    parseJsonFile(paths.projectsFile),
-    parseJsonFile(paths.entriesFile)
+    parseJsonFile(settingsFile),
+    parseJsonFile(projectsFile),
+    parseJsonFile(entriesFile)
   ]);
 
   return {
@@ -198,22 +367,74 @@ export const readStore = async (rootDir: string): Promise<StoreSnapshot> => {
   };
 };
 
-export const writeStore = async (rootDir: string, store: StoreSnapshot): Promise<StoreSnapshot> => {
-  const normalized: StoreSnapshot = {
-    settings: normalizeSettings(store.settings, createDefaultStoreSnapshot().settings),
-    projects: normalizeProjects(store.projects),
-    entries: normalizeEntries(store.entries)
-  };
+const readCurrentManifest = async (rootDir: string): Promise<StoreManifest | null> => {
+  const manifestValue = await parseJsonFile(resolveStorePaths(rootDir).currentFile);
+  return normalizeManifest(manifestValue);
+};
+
+const readCommittedStore = async (rootDir: string): Promise<StoreSnapshot | null> => {
+  const manifest = await readCurrentManifest(rootDir);
+  if (!manifest) {
+    return null;
+  }
+
+  const snapshotPaths = resolveSnapshotPaths(rootDir, manifest.snapshotId);
+  return readStoreFiles(
+    snapshotPaths.settingsFile,
+    snapshotPaths.projectsFile,
+    snapshotPaths.entriesFile
+  );
+};
+
+const removeDirectoryIfExists = async (dirPath: string) => {
+  try {
+    await fs.rm(dirPath, { recursive: true, force: true });
+  } catch {
+    // Cleanup failure should not hide the primary write result.
+  }
+};
+
+export const readStore = async (rootDir: string): Promise<StoreSnapshot> => {
+  const committed = await readCommittedStore(rootDir);
+  if (committed) {
+    return committed;
+  }
+
   const paths = resolveStorePaths(rootDir);
+  return readStoreFiles(paths.settingsFile, paths.projectsFile, paths.entriesFile);
+};
 
-  await fs.mkdir(paths.rootDir, { recursive: true });
-  await Promise.all([
-    writeJsonFile(paths.settingsFile, normalized.settings),
-    writeJsonFile(paths.projectsFile, normalized.projects),
-    writeJsonFile(paths.entriesFile, normalized.entries)
-  ]);
+export const writeStore = async (rootDir: string, store: StoreSnapshot): Promise<StoreSnapshot> => {
+  const validated = assertStoreSnapshot(store);
+  const release = await waitForRootWriteTurn(rootDir);
+  const paths = resolveStorePaths(rootDir);
+  const previousManifest = await readCurrentManifest(rootDir);
+  const snapshotId = createSnapshotId();
+  const snapshotPaths = resolveSnapshotPaths(rootDir, snapshotId);
 
-  return normalized;
+  try {
+    await fs.mkdir(paths.snapshotsDir, { recursive: true });
+    await fs.mkdir(snapshotPaths.rootDir, { recursive: true });
+
+    await Promise.all([
+      writeJsonFile(snapshotPaths.settingsFile, validated.settings),
+      writeJsonFile(snapshotPaths.projectsFile, validated.projects),
+      writeJsonFile(snapshotPaths.entriesFile, validated.entries)
+    ]);
+
+    await writeJsonFile(paths.currentFile, { snapshotId });
+
+    if (previousManifest && previousManifest.snapshotId !== snapshotId) {
+      await removeDirectoryIfExists(resolveSnapshotPaths(rootDir, previousManifest.snapshotId).rootDir);
+    }
+
+    return validated;
+  } catch (error) {
+    await removeDirectoryIfExists(snapshotPaths.rootDir);
+    throw error;
+  } finally {
+    release();
+  }
 };
 
 export const bootstrapStore = async (rootDir: string): Promise<StoreSnapshot> => {
