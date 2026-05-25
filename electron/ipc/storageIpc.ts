@@ -7,12 +7,8 @@ import type {
   UnlockResult,
   UnlockedStoreSnapshot
 } from '../../src/types/desktopBridge';
+import { STORAGE_IPC_CHANNELS } from '../../src/types/ipc';
 import type { StoreSnapshot } from '../../src/types/models';
-
-export const STORAGE_IPC_CHANNELS = {
-  loadStore: 'storage:loadStore',
-  unlock: 'auth:unlock'
-} as const;
 
 const createStoreSummary = (store: StoreSnapshot): StoreSummary => ({
   entryCount: Object.keys(store.entries).length,

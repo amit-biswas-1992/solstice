@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DailyNotesDesktopApi } from '../src/types/desktopBridge';
-import { STORAGE_IPC_CHANNELS } from './ipc/storageIpc';
+import { STORAGE_IPC_CHANNELS } from '../src/types/ipc';
 
 const api: DailyNotesDesktopApi = {
   version: '0.1.0',
