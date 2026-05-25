@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import PinLockScreen from './components/auth/PinLockScreen';
+import WorkspaceShell from './components/layout/WorkspaceShell';
 import type { StoreBootstrap, UnlockedStoreSnapshot } from './types/desktopBridge';
 
 export default function App() {
@@ -108,58 +109,20 @@ export default function App() {
     );
   }
 
-  return (
-    <main className="app-shell">
-      <section className="hero-panel">
-        <p className="eyebrow">Unlocked Shell</p>
-        <h1>Daily Notes Workspace</h1>
-        <p className="lede">
-          {store ? `${store.projects.length} project loaded.` : 'Workspace unlocked.'}
-        </p>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 12,
-            marginTop: 24
-          }}
-        >
-          <ShellCard label="Selected Date" value={store?.settings.lastSelectedDate ?? bootstrap.summary.lastSelectedDate} />
-          <ShellCard label="Last Opened Month" value={store?.settings.lastOpenedMonth ?? bootstrap.summary.lastOpenedMonth} />
-          <ShellCard label="Project Count" value={`${store?.projects.length ?? bootstrap.summary.projectCount}`} />
-        </div>
-        <p className="lede" style={{ marginTop: 20 }}>
-          Selected date: {store?.settings.lastSelectedDate ?? bootstrap.summary.lastSelectedDate}
-        </p>
-        <p className="build-tag">Bridge v{window.dailyNotesDesktop.version}</p>
-      </section>
-    </main>
-  );
-}
+  const unlockedStore = store ?? bootstrap.store;
 
-function ShellCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        padding: '16px 18px',
-        borderRadius: 18,
-        background: 'rgba(255, 255, 255, 0.72)',
-        border: '1px solid rgba(28, 40, 51, 0.1)'
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: '0.78rem',
-          fontWeight: 700,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          color: '#8c5e34'
-        }}
-      >
-        {label}
-      </p>
-      <p style={{ margin: '8px 0 0', fontSize: '1rem', fontWeight: 600 }}>{value}</p>
-    </div>
-  );
+  if (!unlockedStore) {
+    return (
+      <main className="app-shell">
+        <section className="hero-panel">
+          <p className="eyebrow">Workspace Error</p>
+          <h1>Daily Notes Workspace</h1>
+          <p className="lede">The store unlocked, but no workspace snapshot was returned.</p>
+          <p className="build-tag">Bridge v{window.dailyNotesDesktop.version}</p>
+        </section>
+      </main>
+    );
+  }
+
+  return <WorkspaceShell appVersion={window.dailyNotesDesktop.version} store={unlockedStore} />;
 }
