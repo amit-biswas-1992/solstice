@@ -107,4 +107,35 @@ describe('fileStore', () => {
     expect(store.projects).toEqual([]);
     expect(store.entries).toEqual({});
   });
+
+  it('recovers from malformed JSON by preserving a backup and rewriting safe defaults', async () => {
+    const root = await createRoot('malformed');
+    const badSettingsSource = '{"pin":"9999",';
+
+    await fs.writeFile(path.join(root, 'settings.json'), badSettingsSource, 'utf8');
+
+    const readStorePromise = readStore(root);
+
+    await expect(readStorePromise).resolves.toMatchObject({
+      settings: {
+        pin: '1234'
+      },
+      projects: [],
+      entries: {}
+    });
+
+    const filesAfterRead = await fs.readdir(root);
+    const backupFile = filesAfterRead.find(
+      (file) => file.startsWith('settings.json.bak.') && file.endsWith('.json')
+    );
+
+    expect(backupFile).toBeDefined();
+    await expect(fs.readFile(path.join(root, backupFile!), 'utf8')).resolves.toBe(badSettingsSource);
+
+    const bootstrapped = await bootstrapStore(root);
+
+    expect(bootstrapped.settings.pin).toBe('1234');
+
+    await expect(fs.readFile(path.join(root, 'settings.json'), 'utf8')).resolves.toContain('"pin": "1234"');
+  });
 });

@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { resolveStorePaths } from './appPaths';
 import type {
   DayEntry,
@@ -144,10 +143,29 @@ const normalizeEntries = (value: unknown): EntriesByDate => {
   );
 };
 
+const createBackupFilePath = (filePath: string) => {
+  const timestamp = new Date().toISOString().replaceAll(':', '-');
+  return `${filePath}.bak.${timestamp}.json`;
+};
+
+const preserveMalformedFileBackup = async (filePath: string, source: string) => {
+  try {
+    await fs.writeFile(createBackupFilePath(filePath), source, 'utf8');
+  } catch {
+    // Recovery should continue even if backup creation fails.
+  }
+};
+
 const parseJsonFile = async (filePath: string): Promise<unknown | undefined> => {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(raw);
+
+    try {
+      return JSON.parse(raw);
+    } catch {
+      await preserveMalformedFileBackup(filePath, raw);
+      return undefined;
+    }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
