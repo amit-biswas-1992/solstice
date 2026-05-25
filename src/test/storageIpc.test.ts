@@ -2,7 +2,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadBootstrapStateFromRoot, unlockStoreAtRoot } from '../../electron/ipc/storageIpc';
+import {
+  loadBootstrapStateFromRoot,
+  requireAuthenticatedStoreSessionAtRoot,
+  unlockStoreAtRoot
+} from '../../electron/ipc/storageIpc';
 import { resolveStorePaths } from '../../electron/storage/appPaths';
 
 const testRoots: string[] = [];
@@ -105,5 +109,64 @@ describe('storageIpc auth bootstrap contract', () => {
       expect(unlocked.store.settings.lastSelectedDate).toBe('2026-05-25');
       expect('pin' in unlocked.store.settings).toBe(false);
     }
+  });
+
+  it('persists auth state in the main-process session after a successful unlock', async () => {
+    const root = await createRoot('session-boundary');
+    await seedLegacyStoreFiles(root);
+
+    await expect(requireAuthenticatedStoreSessionAtRoot(root)).rejects.toThrow(
+      /authentication required/i
+    );
+
+    await expect(unlockStoreAtRoot(root, '4321')).resolves.toMatchObject({
+      ok: true
+    });
+
+    await expect(requireAuthenticatedStoreSessionAtRoot(root)).resolves.toMatchObject({
+      settings: {
+        pin: '4321',
+        lastOpenedMonth: '2026-05',
+        lastSelectedDate: '2026-05-25'
+      }
+    });
+
+    const bootstrap = await loadBootstrapStateFromRoot(root);
+    expect(bootstrap.auth).toEqual({
+      hasPin: true,
+      isLocked: false
+    });
+    expect(bootstrap.store).toMatchObject({
+      settings: {
+        lastOpenedMonth: '2026-05',
+        lastSelectedDate: '2026-05-25'
+      }
+    });
+  });
+
+  it('fails closed on damaged settings without creating backups or manifests', async () => {
+    const root = await createRoot('damaged-settings');
+    const paths = resolveStorePaths(root);
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(
+      paths.settingsFile,
+      JSON.stringify(
+        {
+          lastOpenedMonth: '2026-05',
+          lastSelectedDate: '2026-05-25'
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await fs.writeFile(paths.projectsFile, '[]\n', 'utf8');
+    await fs.writeFile(paths.entriesFile, '{}\n', 'utf8');
+
+    await expect(loadBootstrapStateFromRoot(root)).rejects.toThrow(/invalid settings\.pin/i);
+    await expect(unlockStoreAtRoot(root, '1234')).rejects.toThrow(/invalid settings\.pin/i);
+
+    const filesAfterReads = await fs.readdir(root);
+    expect(filesAfterReads).toEqual(['entries.json', 'projects.json', 'settings.json']);
   });
 });

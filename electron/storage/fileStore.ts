@@ -15,6 +15,39 @@ interface StoreManifest {
   snapshotId: string;
 }
 
+export interface StoreInspectionReady {
+  status: 'ready';
+  store: StoreSnapshot;
+}
+
+export interface StoreInspectionMissing {
+  status: 'missing';
+}
+
+export interface StoreInspectionDamaged {
+  status: 'damaged';
+  message: string;
+}
+
+export type StoreInspectionResult =
+  | StoreInspectionReady
+  | StoreInspectionMissing
+  | StoreInspectionDamaged;
+
+type ParsedJsonFileResult =
+  | {
+      status: 'missing';
+    }
+  | {
+      status: 'parsed';
+      value: unknown;
+      source: string;
+    }
+  | {
+      status: 'malformed';
+      source: string;
+    };
+
 const rootWriteQueues = new Map<string, Promise<void>>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -339,6 +372,33 @@ const preserveFileBackupIfPresent = async (filePath: string) => {
   }
 };
 
+const parseJsonFilePassive = async (filePath: string): Promise<ParsedJsonFileResult> => {
+  try {
+    const source = await fs.readFile(filePath, 'utf8');
+
+    try {
+      return {
+        status: 'parsed',
+        value: JSON.parse(source),
+        source
+      };
+    } catch {
+      return {
+        status: 'malformed',
+        source
+      };
+    }
+  } catch (error) {
+    if (isErrnoException(error) && error.code === 'ENOENT') {
+      return {
+        status: 'missing'
+      };
+    }
+
+    throw error;
+  }
+};
+
 const parseJsonFile = async (filePath: string): Promise<unknown | undefined> => {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
@@ -364,6 +424,85 @@ const writeJsonFile = async (filePath: string, value: unknown) => {
   await fs.rename(tempFilePath, filePath);
 };
 
+const inspectSettingsFile = (value: unknown, context: string): Settings => {
+  try {
+    return assertSettings(value, context);
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? error.message : `${context}: invalid settings`
+    );
+  }
+};
+
+const inspectLegacyStore = async (
+  settingsFile: string,
+  projectsFile: string,
+  entriesFile: string
+): Promise<StoreInspectionResult> => {
+  const [settingsResult, projectsResult, entriesResult] = await Promise.all([
+    parseJsonFilePassive(settingsFile),
+    parseJsonFilePassive(projectsFile),
+    parseJsonFilePassive(entriesFile)
+  ]);
+
+  if (
+    settingsResult.status === 'missing' &&
+    projectsResult.status === 'missing' &&
+    entriesResult.status === 'missing'
+  ) {
+    return {
+      status: 'missing'
+    };
+  }
+
+  if (settingsResult.status === 'missing') {
+    return {
+      status: 'damaged',
+      message: 'The settings store is missing. Restore settings.json before unlocking.'
+    };
+  }
+
+  if (settingsResult.status === 'malformed') {
+    return {
+      status: 'damaged',
+      message: 'The settings store is corrupted. Restore settings.json before unlocking.'
+    };
+  }
+
+  if (projectsResult.status === 'malformed') {
+    return {
+      status: 'damaged',
+      message: 'The projects store is corrupted. Restore projects.json before continuing.'
+    };
+  }
+
+  if (entriesResult.status === 'malformed') {
+    return {
+      status: 'damaged',
+      message: 'The entries store is corrupted. Restore entries.json before continuing.'
+    };
+  }
+
+  try {
+    return {
+      status: 'ready',
+      store: {
+        settings: inspectSettingsFile(settingsResult.value, 'invalid settings.json'),
+        projects:
+          projectsResult.status === 'parsed' ? normalizeProjects(projectsResult.value) : [],
+        entries:
+          entriesResult.status === 'parsed' ? normalizeEntries(entriesResult.value) : {}
+      }
+    };
+  } catch (error) {
+    return {
+      status: 'damaged',
+      message:
+        error instanceof Error ? error.message : 'The settings store is invalid.'
+    };
+  }
+};
+
 const readStoreFiles = async (settingsFile: string, projectsFile: string, entriesFile: string) => {
   const defaults = createDefaultStoreSnapshot();
   const [settingsValue, projectsValue, entriesValue] = await Promise.all([
@@ -382,6 +521,34 @@ const readStoreFiles = async (settingsFile: string, projectsFile: string, entrie
 const readCurrentManifest = async (rootDir: string): Promise<StoreManifest | null> => {
   const manifestValue = await parseJsonFile(resolveStorePaths(rootDir).currentFile);
   return normalizeManifest(manifestValue);
+};
+
+const inspectCurrentManifest = async (
+  rootDir: string
+): Promise<StoreManifest | 'missing' | StoreInspectionDamaged> => {
+  const currentFile = resolveStorePaths(rootDir).currentFile;
+  const manifestResult = await parseJsonFilePassive(currentFile);
+
+  if (manifestResult.status === 'missing') {
+    return 'missing';
+  }
+
+  if (manifestResult.status === 'malformed') {
+    return {
+      status: 'damaged',
+      message: 'The current snapshot manifest is corrupted. Restore current.json before continuing.'
+    };
+  }
+
+  const manifest = normalizeManifest(manifestResult.value);
+  if (!manifest) {
+    return {
+      status: 'damaged',
+      message: 'The current snapshot manifest is invalid. Restore current.json before continuing.'
+    };
+  }
+
+  return manifest;
 };
 
 const invalidateCurrentManifest = async (rootDir: string) => {
@@ -424,6 +591,76 @@ const removeDirectoryIfExists = async (dirPath: string) => {
   } catch {
     // Cleanup failure should not hide the primary write result.
   }
+};
+
+export const inspectStore = async (rootDir: string): Promise<StoreInspectionResult> => {
+  const manifestInspection = await inspectCurrentManifest(rootDir);
+  if (manifestInspection !== 'missing') {
+    if ('status' in manifestInspection) {
+      return manifestInspection;
+    }
+
+    const snapshotPaths = resolveSnapshotPaths(rootDir, manifestInspection.snapshotId);
+    const [settingsResult, projectsResult, entriesResult] = await Promise.all([
+      parseJsonFilePassive(snapshotPaths.settingsFile),
+      parseJsonFilePassive(snapshotPaths.projectsFile),
+      parseJsonFilePassive(snapshotPaths.entriesFile)
+    ]);
+
+    if (settingsResult.status === 'missing') {
+      return {
+        status: 'damaged',
+        message: 'The committed settings snapshot is missing. Restore the active snapshot before unlocking.'
+      };
+    }
+
+    if (settingsResult.status === 'malformed') {
+      return {
+        status: 'damaged',
+        message: 'The committed settings snapshot is corrupted. Restore the active snapshot before unlocking.'
+      };
+    }
+
+    if (projectsResult.status !== 'parsed') {
+      return {
+        status: 'damaged',
+        message:
+          projectsResult.status === 'missing'
+            ? 'The committed projects snapshot is missing. Restore the active snapshot before continuing.'
+            : 'The committed projects snapshot is corrupted. Restore the active snapshot before continuing.'
+      };
+    }
+
+    if (entriesResult.status !== 'parsed') {
+      return {
+        status: 'damaged',
+        message:
+          entriesResult.status === 'missing'
+            ? 'The committed entries snapshot is missing. Restore the active snapshot before continuing.'
+            : 'The committed entries snapshot is corrupted. Restore the active snapshot before continuing.'
+      };
+    }
+
+    try {
+      return {
+        status: 'ready',
+        store: {
+          settings: inspectSettingsFile(settingsResult.value, 'invalid committed settings'),
+          projects: normalizeProjects(projectsResult.value),
+          entries: normalizeEntries(entriesResult.value)
+        }
+      };
+    } catch (error) {
+      return {
+        status: 'damaged',
+        message:
+          error instanceof Error ? error.message : 'The committed settings snapshot is invalid.'
+      };
+    }
+  }
+
+  const paths = resolveStorePaths(rootDir);
+  return inspectLegacyStore(paths.settingsFile, paths.projectsFile, paths.entriesFile);
 };
 
 export const readStore = async (rootDir: string): Promise<StoreSnapshot> => {

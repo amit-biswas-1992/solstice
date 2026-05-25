@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron';
-import { readStore } from '../storage/fileStore';
+import { bootstrapStore, inspectStore } from '../storage/fileStore';
 import { resolveAppDataStorePaths } from '../storage/appPaths';
 import type {
   StoreBootstrap,
@@ -9,6 +9,9 @@ import type {
 } from '../../src/types/desktopBridge';
 import { STORAGE_IPC_CHANNELS } from '../../src/types/ipc';
 import type { StoreSnapshot } from '../../src/types/models';
+
+const unlockedRoots = new Set<string>();
+const AUTH_REQUIRED_MESSAGE = 'Authentication required. Unlock the workspace first.';
 
 const createStoreSummary = (store: StoreSnapshot): StoreSummary => ({
   entryCount: Object.keys(store.entries).length,
@@ -28,27 +31,82 @@ const createUnlockedStoreSnapshot = (store: StoreSnapshot): UnlockedStoreSnapsho
   entries: store.entries
 });
 
+const isRootUnlocked = (rootDir: string) => unlockedRoots.has(rootDir);
+
+const markRootUnlocked = (rootDir: string) => {
+  unlockedRoots.add(rootDir);
+};
+
+const clearRootSession = (rootDir: string) => {
+  unlockedRoots.delete(rootDir);
+};
+
+const loadStoreForBootstrapAtRoot = async (rootDir: string): Promise<StoreSnapshot> => {
+  const inspection = await inspectStore(rootDir);
+  if (inspection.status === 'ready') {
+    return inspection.store;
+  }
+
+  clearRootSession(rootDir);
+
+  if (inspection.status === 'missing') {
+    return bootstrapStore(rootDir);
+  }
+
+  throw new Error(inspection.message);
+};
+
 export const loadBootstrapStateFromRoot = async (rootDir: string): Promise<StoreBootstrap> => {
-  const store = await readStore(rootDir);
+  const store = await loadStoreForBootstrapAtRoot(rootDir);
   const pinRequired = hasPin(store);
+  const isLocked = pinRequired && !isRootUnlocked(rootDir);
+
+  if (!pinRequired) {
+    markRootUnlocked(rootDir);
+  }
 
   return {
     auth: {
       hasPin: pinRequired,
-      isLocked: pinRequired
+      isLocked
     },
     summary: createStoreSummary(store),
-    store: pinRequired ? undefined : createUnlockedStoreSnapshot(store)
+    store: isLocked ? undefined : createUnlockedStoreSnapshot(store)
   };
+};
+
+export const requireAuthenticatedStoreSessionAtRoot = async (
+  rootDir: string
+): Promise<StoreSnapshot> => {
+  const inspection = await inspectStore(rootDir);
+  if (inspection.status === 'missing') {
+    throw new Error('The local store has not been initialized yet.');
+  }
+
+  if (inspection.status === 'damaged') {
+    clearRootSession(rootDir);
+    throw new Error(inspection.message);
+  }
+
+  if (hasPin(inspection.store) && !isRootUnlocked(rootDir)) {
+    throw new Error(AUTH_REQUIRED_MESSAGE);
+  }
+
+  if (!hasPin(inspection.store)) {
+    markRootUnlocked(rootDir);
+  }
+
+  return inspection.store;
 };
 
 export const unlockStoreAtRoot = async (
   rootDir: string,
   pin: string
 ): Promise<UnlockResult> => {
-  const store = await readStore(rootDir);
+  const store = await loadStoreForBootstrapAtRoot(rootDir);
 
   if (!hasPin(store) || store.settings.pin === pin) {
+    markRootUnlocked(rootDir);
     return {
       ok: true,
       store: createUnlockedStoreSnapshot(store)

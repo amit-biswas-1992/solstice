@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   bootstrapStore,
+  inspectStore,
   readStore,
   writeStore
 } from '../../electron/storage/fileStore';
@@ -144,6 +145,65 @@ describe('fileStore', () => {
     const committedSettingsPath = path.join(root, 'snapshots', manifest.snapshotId, 'settings.json');
 
     await expect(fs.readFile(committedSettingsPath, 'utf8')).resolves.toContain('"pin": "1234"');
+  });
+
+  it('inspects a brand-new missing store without mutating the filesystem', async () => {
+    const root = await createRoot('inspect-missing');
+
+    await expect(inspectStore(root)).resolves.toEqual({
+      status: 'missing'
+    });
+    await expect(fs.readdir(root)).resolves.toEqual([]);
+  });
+
+  it('inspects damaged settings without silently defaulting the PIN or writing backups', async () => {
+    const root = await createRoot('inspect-damaged-settings');
+    const badSettingsSource = '{"pin":"9999",';
+
+    await fs.writeFile(path.join(root, 'settings.json'), badSettingsSource, 'utf8');
+    await fs.writeFile(path.join(root, 'projects.json'), '[]\n', 'utf8');
+    await fs.writeFile(path.join(root, 'entries.json'), '{}\n', 'utf8');
+
+    await expect(inspectStore(root)).resolves.toEqual({
+      status: 'damaged',
+      message: 'The settings store is corrupted. Restore settings.json before unlocking.'
+    });
+
+    const filesAfterInspect = await fs.readdir(root);
+    expect(
+      filesAfterInspect.some(
+        (file) => file.startsWith('settings.json.bak.') && file.endsWith('.json')
+      )
+    ).toBe(false);
+  });
+
+  it('inspects partial settings as damaged instead of restoring the default PIN', async () => {
+    const root = await createRoot('inspect-partial-settings');
+
+    await fs.writeFile(
+      path.join(root, 'settings.json'),
+      JSON.stringify(
+        {
+          lastOpenedMonth: '2026-05',
+          lastSelectedDate: '2026-05-25'
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await fs.writeFile(path.join(root, 'projects.json'), '[]\n', 'utf8');
+    await fs.writeFile(path.join(root, 'entries.json'), '{}\n', 'utf8');
+
+    await expect(inspectStore(root)).resolves.toEqual({
+      status: 'damaged',
+      message: 'invalid settings.json: invalid settings.pin'
+    });
+    await expect(readStore(root)).resolves.toMatchObject({
+      settings: {
+        pin: '1234'
+      }
+    });
   });
 
   it('rejects invalid in-memory data instead of silently dropping it', async () => {
