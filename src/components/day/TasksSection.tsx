@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Project, Task } from '../../types/models';
 
 interface TaskDraft {
@@ -7,12 +7,13 @@ interface TaskDraft {
 }
 
 interface TasksSectionProps {
-  onAddTask: (draft: TaskDraft) => Promise<void>;
-  onDeleteTask: (taskId: string) => Promise<void>;
+  onAddTask: (draft: TaskDraft) => Promise<boolean>;
+  onDeleteTask: (taskId: string) => Promise<boolean>;
   onOpenPopup: (task: Task) => void;
-  onToggleTask: (taskId: string) => Promise<void>;
-  onUpdateTask: (taskId: string, draft: TaskDraft) => Promise<void>;
+  onToggleTask: (taskId: string) => Promise<boolean>;
+  onUpdateTask: (taskId: string, draft: TaskDraft) => Promise<boolean>;
   projects: Project[];
+  selectedDate: string;
   tasks: Task[];
 }
 
@@ -25,6 +26,7 @@ export default function TasksSection({
   onToggleTask,
   onUpdateTask,
   projects,
+  selectedDate,
   tasks
 }: TasksSectionProps) {
   const [draftText, setDraftText] = useState('');
@@ -50,6 +52,11 @@ export default function TasksSection({
     setIsAdding(false);
   };
 
+  useEffect(() => {
+    resetInlineState();
+    resetComposer();
+  }, [selectedDate]);
+
   const handleAddTask = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -58,11 +65,13 @@ export default function TasksSection({
       return;
     }
 
-    await onAddTask({
+    const saved = await onAddTask({
       text: normalizedText,
       projectId: normalizeProjectId(draftProjectId)
     });
-    resetComposer();
+    if (saved) {
+      resetComposer();
+    }
   };
 
   const handleSaveEdit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -77,11 +86,13 @@ export default function TasksSection({
       return;
     }
 
-    await onUpdateTask(editingTaskId, {
+    const saved = await onUpdateTask(editingTaskId, {
       text: normalizedText,
       projectId: normalizeProjectId(editingProjectId)
     });
-    resetInlineState();
+    if (saved) {
+      resetInlineState();
+    }
   };
 
   const handleEscape = (event: React.KeyboardEvent<HTMLElement>) => {
@@ -235,7 +246,7 @@ export default function TasksSection({
                     <button type="button" onClick={() => onOpenPopup(task)}>
                       Open editor
                     </button>
-                    <button type="button" onClick={() => onDeleteTask(task.id)}>
+                    <button type="button" onClick={() => void onDeleteTask(task.id)}>
                       Delete task
                     </button>
                   </div>

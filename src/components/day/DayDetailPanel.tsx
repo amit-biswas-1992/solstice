@@ -111,7 +111,7 @@ export default function DayDetailPanel({
       errorMessage?: string;
       selectedDate?: string;
     }
-  ) => {
+  ): Promise<boolean> => {
     const nextSelectedDate = options?.selectedDate;
     const result = await onPersistEntries(nextEntries, {
       selectedDate: nextSelectedDate ?? selectedDate,
@@ -121,7 +121,7 @@ export default function DayDetailPanel({
     if (!result.ok) {
       setStatusTone('error');
       setStatusMessage(result.error ?? options?.errorMessage ?? 'Unable to save the current changes.');
-      throw new Error(result.error ?? options?.errorMessage ?? 'Unable to save the current changes.');
+      return false;
     }
 
     if (nextSelectedDate && nextSelectedDate !== selectedDate) {
@@ -130,10 +130,11 @@ export default function DayDetailPanel({
 
     setStatusTone('success');
     setStatusMessage(successMessage);
+    return true;
   };
 
   const handleAddNote = async ({ projectId, text }: EntryDraft) => {
-    await persistEntries(
+    return persistEntries(
       updateEntriesForDate(entries, selectedDate, (entry) => ({
         ...entry,
         notes: [...entry.notes, createNote(text, projectId)]
@@ -143,7 +144,7 @@ export default function DayDetailPanel({
   };
 
   const handleUpdateNote = async (noteId: string, { projectId, text }: EntryDraft) => {
-    await persistEntries(
+    return persistEntries(
       upsertItemInEntries(entries, selectedDate, 'notes', noteId, selectedDate, (note: Note) => ({
         ...note,
         projectId,
@@ -155,14 +156,14 @@ export default function DayDetailPanel({
   };
 
   const handleDeleteNote = async (noteId: string) => {
-    await persistEntries(
+    return persistEntries(
       removeItemFromEntries(entries, selectedDate, 'notes', noteId),
       'Note deleted from the selected day.'
     );
   };
 
   const handleAddTask = async ({ projectId, text }: EntryDraft) => {
-    await persistEntries(
+    return persistEntries(
       updateEntriesForDate(entries, selectedDate, (entry) => ({
         ...entry,
         tasks: [...entry.tasks, createTask(text, projectId)]
@@ -172,7 +173,7 @@ export default function DayDetailPanel({
   };
 
   const handleUpdateTask = async (taskId: string, { projectId, text }: EntryDraft) => {
-    await persistEntries(
+    return persistEntries(
       upsertItemInEntries(entries, selectedDate, 'tasks', taskId, selectedDate, (task: Task) => ({
         ...task,
         projectId,
@@ -184,7 +185,7 @@ export default function DayDetailPanel({
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    await persistEntries(
+    return persistEntries(
       removeItemFromEntries(entries, selectedDate, 'tasks', taskId),
       'Task deleted from the selected day.'
     );
@@ -193,7 +194,7 @@ export default function DayDetailPanel({
   const handleToggleTask = async (taskId: string) => {
     const nextTask = tasks.find((task) => task.id === taskId);
 
-    await persistEntries(
+    return persistEntries(
       upsertItemInEntries(entries, selectedDate, 'tasks', taskId, selectedDate, (task: Task) => ({
         ...task,
         done: !task.done,
@@ -205,11 +206,13 @@ export default function DayDetailPanel({
 
   const handleSavePopup = async ({ projectId, targetDate, text }: PopupDraft) => {
     if (!popupState) {
-      return;
+      return false;
     }
 
+    let saved = false;
+
     if (popupState.kind === 'note') {
-      await persistEntries(
+      saved = await persistEntries(
         upsertItemInEntries(entries, selectedDate, 'notes', popupState.entryId, targetDate, (note: Note) => ({
           ...note,
           projectId,
@@ -222,7 +225,7 @@ export default function DayDetailPanel({
         }
       );
     } else {
-      await persistEntries(
+      saved = await persistEntries(
         upsertItemInEntries(entries, selectedDate, 'tasks', popupState.entryId, targetDate, (task: Task) => ({
           ...task,
           projectId,
@@ -236,7 +239,11 @@ export default function DayDetailPanel({
       );
     }
 
-    setPopupState(null);
+    if (saved) {
+      setPopupState(null);
+    }
+
+    return saved;
   };
 
   const openPopupForNote = (note: Note) => {
@@ -287,6 +294,7 @@ export default function DayDetailPanel({
         onOpenPopup={openPopupForNote}
         onUpdateNote={handleUpdateNote}
         projects={projects}
+        selectedDate={selectedDate}
       />
 
       <TasksSection
@@ -297,6 +305,7 @@ export default function DayDetailPanel({
         onToggleTask={handleToggleTask}
         onUpdateTask={handleUpdateTask}
         projects={projects}
+        selectedDate={selectedDate}
       />
 
       <EntryPopupEditor

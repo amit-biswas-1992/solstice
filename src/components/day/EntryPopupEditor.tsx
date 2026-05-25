@@ -9,7 +9,7 @@ interface EntryPopupEditorProps {
   isOpen: boolean;
   kind: 'note' | 'task';
   onClose: () => void;
-  onSave: (payload: { projectId?: string; targetDate: string; text: string }) => Promise<void>;
+  onSave: (payload: { projectId?: string; targetDate: string; text: string }) => Promise<boolean>;
   projects: Project[];
 }
 

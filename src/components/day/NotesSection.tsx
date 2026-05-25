@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Note, Project } from '../../types/models';
 
 interface NoteDraft {
@@ -8,11 +8,12 @@ interface NoteDraft {
 
 interface NotesSectionProps {
   notes: Note[];
-  onAddNote: (draft: NoteDraft) => Promise<void>;
-  onDeleteNote: (noteId: string) => Promise<void>;
+  onAddNote: (draft: NoteDraft) => Promise<boolean>;
+  onDeleteNote: (noteId: string) => Promise<boolean>;
   onOpenPopup: (note: Note) => void;
-  onUpdateNote: (noteId: string, draft: NoteDraft) => Promise<void>;
+  onUpdateNote: (noteId: string, draft: NoteDraft) => Promise<boolean>;
   projects: Project[];
+  selectedDate: string;
 }
 
 const normalizeProjectId = (projectId: string) => (projectId.length > 0 ? projectId : undefined);
@@ -23,7 +24,8 @@ export default function NotesSection({
   onDeleteNote,
   onOpenPopup,
   onUpdateNote,
-  projects
+  projects,
+  selectedDate
 }: NotesSectionProps) {
   const [draftText, setDraftText] = useState('');
   const [draftProjectId, setDraftProjectId] = useState('');
@@ -48,6 +50,11 @@ export default function NotesSection({
     setIsAdding(false);
   };
 
+  useEffect(() => {
+    resetInlineState();
+    resetComposer();
+  }, [selectedDate]);
+
   const handleAddNote = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -56,11 +63,13 @@ export default function NotesSection({
       return;
     }
 
-    await onAddNote({
+    const saved = await onAddNote({
       text: normalizedText,
       projectId: normalizeProjectId(draftProjectId)
     });
-    resetComposer();
+    if (saved) {
+      resetComposer();
+    }
   };
 
   const handleSaveEdit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -75,11 +84,13 @@ export default function NotesSection({
       return;
     }
 
-    await onUpdateNote(editingNoteId, {
+    const saved = await onUpdateNote(editingNoteId, {
       text: normalizedText,
       projectId: normalizeProjectId(editingProjectId)
     });
-    resetInlineState();
+    if (saved) {
+      resetInlineState();
+    }
   };
 
   const handleEscape = (event: React.KeyboardEvent<HTMLElement>) => {
@@ -220,7 +231,7 @@ export default function NotesSection({
                     <button type="button" onClick={() => onOpenPopup(note)}>
                       Open editor
                     </button>
-                    <button type="button" onClick={() => onDeleteNote(note.id)}>
+                    <button type="button" onClick={() => void onDeleteNote(note.id)}>
                       Delete note
                     </button>
                   </div>

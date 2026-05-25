@@ -232,4 +232,55 @@ describe('storageIpc auth bootstrap contract', () => {
     const filesAfterReads = await fs.readdir(root);
     expect(filesAfterReads).toEqual(['entries.json', 'projects.json', 'settings.json']);
   });
+
+  it('fails closed on damaged project or entry payloads during passive bootstrap and unlock reads', async () => {
+    const root = await createRoot('damaged-entry-payloads');
+    const paths = resolveStorePaths(root);
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(
+      paths.settingsFile,
+      JSON.stringify(
+        {
+          pin: '4321',
+          lastOpenedMonth: '2026-05',
+          lastSelectedDate: '2026-05-25'
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await fs.writeFile(
+      paths.projectsFile,
+      JSON.stringify(
+        [
+          {
+            id: 'project-alpha',
+            createdAt: '2026-05-25T10:00:00.000Z',
+            updatedAt: '2026-05-25T10:00:00.000Z'
+          }
+        ],
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await fs.writeFile(
+      paths.entriesFile,
+      JSON.stringify(
+        {
+          '2026-05-25': {
+            notes: [],
+            tasks: []
+          }
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    await expect(loadBootstrapStateFromRoot(root)).rejects.toThrow(/missing name/i);
+    await expect(unlockStoreAtRoot(root, '4321')).rejects.toThrow(/missing name/i);
+  });
 });

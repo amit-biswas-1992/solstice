@@ -434,6 +434,32 @@ const inspectSettingsFile = (value: unknown, context: string): Settings => {
   }
 };
 
+const inspectProjectsFile = (value: unknown, context: string): Project[] => {
+  if (!Array.isArray(value)) {
+    throw new Error(`${context}: projects must be an array`);
+  }
+
+  return value.map((project, index) => {
+    try {
+      return assertProject(project, index);
+    } catch (error) {
+      throw new Error(
+        error instanceof Error ? `${context}: ${error.message}` : `${context}: invalid project data`
+      );
+    }
+  });
+};
+
+const inspectEntriesFile = (value: unknown, context: string): EntriesByDate => {
+  try {
+    return assertEntries(value);
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? `${context}: ${error.message}` : `${context}: invalid entries data`
+    );
+  }
+};
+
 const inspectLegacyStore = async (
   settingsFile: string,
   projectsFile: string,
@@ -488,10 +514,8 @@ const inspectLegacyStore = async (
       status: 'ready',
       store: {
         settings: inspectSettingsFile(settingsResult.value, 'invalid settings.json'),
-        projects:
-          projectsResult.status === 'parsed' ? normalizeProjects(projectsResult.value) : [],
-        entries:
-          entriesResult.status === 'parsed' ? normalizeEntries(entriesResult.value) : {}
+        projects: projectsResult.status === 'parsed' ? inspectProjectsFile(projectsResult.value, 'invalid projects.json') : [],
+        entries: entriesResult.status === 'parsed' ? inspectEntriesFile(entriesResult.value, 'invalid entries.json') : {}
       }
     };
   } catch (error) {
@@ -646,8 +670,8 @@ export const inspectStore = async (rootDir: string): Promise<StoreInspectionResu
         status: 'ready',
         store: {
           settings: inspectSettingsFile(settingsResult.value, 'invalid committed settings'),
-          projects: normalizeProjects(projectsResult.value),
-          entries: normalizeEntries(entriesResult.value)
+          projects: inspectProjectsFile(projectsResult.value, 'invalid committed projects'),
+          entries: inspectEntriesFile(entriesResult.value, 'invalid committed entries')
         }
       };
     } catch (error) {

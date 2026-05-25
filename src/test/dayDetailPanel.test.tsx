@@ -85,11 +85,13 @@ const createBootstrap = (store: UnlockedStoreSnapshot): StoreBootstrap => ({
   store
 });
 
-const renderShell = () => {
+type PersistStoreFn = (snapshot: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>;
+
+const createPersistStoreMock = () =>
+  vi.fn<PersistStoreFn>().mockImplementation(async (snapshot) => snapshot);
+
+const renderShell = (onPersistStore = createPersistStoreMock()) => {
   const store = createStore();
-  const onPersistStore = vi
-    .fn<(snapshot: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>>()
-    .mockImplementation(async (snapshot) => snapshot);
 
   render(<WorkspaceShell appVersion="0.1.0" onPersistStore={onPersistStore} store={store} />);
 
@@ -185,6 +187,38 @@ describe('Day detail panel', () => {
     expect(screen.queryByRole('dialog', { name: 'Note editor' })).not.toBeInTheDocument();
     expect(screen.getByText('Ship shell layout')).toBeInTheDocument();
     expect(onPersistStore).not.toHaveBeenCalled();
+  });
+
+  it('resets inline composer state when the selected day changes', async () => {
+    const { onPersistStore, user } = renderShell();
+
+    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    await user.type(screen.getByLabelText('New note'), 'Stale draft');
+    await user.selectOptions(screen.getByLabelText('New note project tag'), 'project-beta');
+
+    await user.click(screen.getByRole('button', { name: /may 26, 2026\./i }));
+
+    expect(screen.queryByLabelText('New note')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Stale draft')).not.toBeInTheDocument();
+    expect(screen.getByText('Selected date: 2026-05-26')).toBeInTheDocument();
+    expect(onPersistStore).not.toHaveBeenCalled();
+  });
+
+  it('keeps editors open and shows an error status when save fails without throwing', async () => {
+    const failingPersist = vi
+      .fn<(snapshot: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>>()
+      .mockRejectedValue(new Error('Disk full'));
+    const { user } = renderShell(failingPersist);
+
+    await user.click(screen.getByRole('button', { name: /inline edit task draft release checklist/i }));
+    await user.clear(screen.getByLabelText('Edit task Draft release checklist'));
+    await user.type(screen.getByLabelText('Edit task Draft release checklist'), 'Still pending');
+
+    await expect(user.click(screen.getByRole('button', { name: /^save$/i }))).resolves.toBeUndefined();
+
+    expect(screen.getByLabelText('Edit task Draft release checklist')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Still pending')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Disk full');
   });
 
   it('routes selected-day saves through the desktop bridge when mounted from App', async () => {

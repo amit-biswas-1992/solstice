@@ -206,6 +206,88 @@ describe('fileStore', () => {
     });
   });
 
+  it('flags malformed project payloads as damaged during passive inspection instead of truncating them', async () => {
+    const root = await createRoot('inspect-damaged-project-payload');
+
+    await fs.writeFile(
+      path.join(root, 'settings.json'),
+      JSON.stringify(
+        {
+          pin: '4321',
+          lastOpenedMonth: '2026-05',
+          lastSelectedDate: '2026-05-25'
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await fs.writeFile(
+      path.join(root, 'projects.json'),
+      JSON.stringify(
+        [
+          {
+            id: 'p1',
+            createdAt: '2026-05-25T10:00:00.000Z',
+            updatedAt: '2026-05-25T10:00:00.000Z'
+          }
+        ],
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await fs.writeFile(path.join(root, 'entries.json'), '{}\n', 'utf8');
+
+    await expect(inspectStore(root)).resolves.toEqual({
+      status: 'damaged',
+      message: 'invalid projects.json: invalid project at index 0: missing name'
+    });
+  });
+
+  it('flags malformed note/task payloads in committed snapshots as damaged during passive inspection', async () => {
+    const root = await createRoot('inspect-damaged-committed-entries');
+    const store = createStore();
+
+    await writeStore(root, store);
+
+    const currentManifest = JSON.parse(await fs.readFile(path.join(root, 'current.json'), 'utf8')) as {
+      snapshotId: string;
+    };
+    const committedEntriesPath = path.join(
+      root,
+      'snapshots',
+      currentManifest.snapshotId,
+      'entries.json'
+    );
+
+    await fs.writeFile(
+      committedEntriesPath,
+      JSON.stringify(
+        {
+          '2026-05-25': {
+            notes: [
+              {
+                id: 'n1',
+                createdAt: '2026-05-25T10:00:00.000Z',
+                updatedAt: '2026-05-25T10:00:00.000Z'
+              }
+            ],
+            tasks: []
+          }
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    await expect(inspectStore(root)).resolves.toEqual({
+      status: 'damaged',
+      message: 'invalid committed entries: invalid note 0 for date 2026-05-25: missing text'
+    });
+  });
+
   it('rejects invalid in-memory data instead of silently dropping it', async () => {
     const root = await createRoot('invalid-write');
 
