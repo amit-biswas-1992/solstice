@@ -14,6 +14,8 @@ interface EntryPopupEditorProps {
 }
 
 const normalizeProjectId = (projectId: string) => (projectId.length > 0 ? projectId : undefined);
+const fieldClass =
+  'rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 py-2.5 text-base text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]';
 
 export default function EntryPopupEditor({
   entryLabel,
@@ -69,36 +71,44 @@ export default function EntryPopupEditor({
 
   return (
     <section
-      className="selected-day-panel__section selected-day-panel__dialog"
+      className="rounded-[24px] border border-[color:var(--color-line)] bg-white px-5 py-5"
       role="dialog"
       aria-modal="true"
       aria-labelledby="entry-popup-editor-title"
       onKeyDown={handleEscape}
     >
-      <div className="selected-day-panel__section-header">
-        <h3 id="entry-popup-editor-title">{kind === 'note' ? 'Note editor' : 'Task editor'}</h3>
-        <span>{entryLabel}</span>
+      <div className="flex items-start justify-between gap-3">
+        <h3 id="entry-popup-editor-title" className="text-[22px] leading-[26px] font-[330] text-[color:var(--color-ink)]">
+          {kind === 'note' ? 'Note editor' : 'Task editor'}
+        </h3>
+        <span className="text-[12px] uppercase tracking-[0.08em] text-[color:var(--color-copy-muted)]">
+          {entryLabel}
+        </span>
       </div>
-      <p className="selected-day-panel__summary">
+      <p className="mt-2 text-sm leading-5 text-[color:var(--color-copy-muted)]">
         Update the text, retag the item, or move it to another day without leaving the selected-day
         panel.
       </p>
-      <form className="selected-day-panel__editor-form" onSubmit={handleSubmit}>
-        <label className="selected-day-panel__field">
-          <span>{kind === 'note' ? 'Note details' : 'Task details'}</span>
+      <form className="mt-4 grid gap-4" onSubmit={handleSubmit}>
+        <label className="grid gap-2">
+          <span className="text-sm font-medium text-[color:var(--color-ink)]">
+            {kind === 'note' ? 'Note details' : 'Task details'}
+          </span>
           <textarea
             aria-label={kind === 'note' ? 'Note details' : 'Task details'}
+            className={fieldClass}
             rows={5}
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
           />
         </label>
 
-        <div className="selected-day-panel__field-grid">
-          <label className="selected-day-panel__field">
-            <span>Project tag</span>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2">
+            <span className="text-sm font-medium text-[color:var(--color-ink)]">Project tag</span>
             <select
               aria-label="Project tag"
+              className={`${fieldClass} h-11 py-0`}
               value={draftProjectId}
               onChange={(event) => setDraftProjectId(event.target.value)}
             >
@@ -111,22 +121,31 @@ export default function EntryPopupEditor({
             </select>
           </label>
 
-          <label className="selected-day-panel__field">
-            <span>Move to date</span>
+          <label className="grid gap-2">
+            <span className="text-sm font-medium text-[color:var(--color-ink)]">Move to date</span>
             <input
               aria-label="Move to date"
               type="date"
+              className={`${fieldClass} h-11 py-0`}
               value={draftDate}
               onChange={(event) => setDraftDate(event.target.value)}
             />
           </label>
         </div>
 
-        <div className="selected-day-panel__actions">
-          <button type="button" onClick={onClose}>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="inline-flex h-11 items-center justify-center rounded-[10px] border border-[color:var(--color-line)] bg-white px-4 text-sm font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-paper-muted)]"
+            onClick={onClose}
+          >
             Cancel
           </button>
-          <button type="submit" disabled={draftText.trim().length === 0 || draftDate.trim().length === 0}>
+          <button
+            type="submit"
+            className="inline-flex h-11 items-center justify-center rounded-[10px] bg-[color:var(--color-ink)] px-5 text-base font-medium text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={draftText.trim().length === 0 || draftDate.trim().length === 0}
+          >
             Save changes
           </button>
         </div>

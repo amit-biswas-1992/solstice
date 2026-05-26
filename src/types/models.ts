@@ -16,12 +16,16 @@ export interface Note {
   id: string;
   text: string;
   projectId?: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Task extends Note {
   done: boolean;
+  description?: string;
+  url?: string;
+  priority?: 'low' | 'medium' | 'high';
 }
 
 export interface DayEntry {

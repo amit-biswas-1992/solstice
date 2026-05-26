@@ -116,6 +116,6 @@ describe('PinLockScreen bootstrap flow', () => {
       await screen.findByRole('heading', { name: /daily notes workspace/i })
     ).toBeInTheDocument();
     expect(screen.getByText(/1 project loaded/i)).toBeInTheDocument();
-    expect(screen.getByText(/selected date: 2026-05-25/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/selected date: 2026-05-25/i)[0]).toBeInTheDocument();
   });
 });

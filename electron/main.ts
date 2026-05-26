@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
-import { registerStorageIpc } from './ipc/storageIpc';
+import { registerStorageIpc } from './ipc/storageIpc.js';
 
 const createWindow = async () => {
   const window = new BrowserWindow({

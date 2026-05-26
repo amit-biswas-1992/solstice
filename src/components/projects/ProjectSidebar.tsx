@@ -1,28 +1,32 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { EntriesByDate, Project } from '../../types/models';
 
 interface ProjectSidebarProps {
+  collapsed: boolean;
+  activeProjectId: string | null;
   entries: EntriesByDate;
+  onCreateProject: (name: string) => Promise<boolean>;
+  onSelectProject: (projectId: string | null) => void;
+  onToggleCollapsed: () => void;
   projects: Project[];
-  selectedDate: string;
 }
 
 const FALLBACK_SWATCHES = ['#1f4e79', '#8c5e34', '#2f6b5f', '#905a2a', '#5b4d9d'];
 
-export default function ProjectSidebar({ entries, projects, selectedDate }: ProjectSidebarProps) {
-  const selectedEntry = entries[selectedDate];
-  const selectedProjectIds = useMemo(
-    () =>
-      new Set(
-        [...(selectedEntry?.notes ?? []), ...(selectedEntry?.tasks ?? [])]
-          .map((item) => item.projectId)
-          .filter((projectId): projectId is string => Boolean(projectId))
-      ),
-    [selectedEntry]
-  );
-  const { activeDays, projectUsageById } = useMemo(() => {
+export default function ProjectSidebar({
+  collapsed,
+  activeProjectId,
+  entries,
+  onCreateProject,
+  onSelectProject,
+  onToggleCollapsed,
+  projects
+}: ProjectSidebarProps) {
+  const [projectName, setProjectName] = useState('');
+  const { activeDays, projectUsageById, unassignedItems } = useMemo(() => {
     const usageById = new Map<string, number>();
     let nextActiveDays = 0;
+    let nextUnassignedItems = 0;
 
     Object.values(entries).forEach((entry) => {
       const items = [...entry.notes, ...entry.tasks];
@@ -33,6 +37,7 @@ export default function ProjectSidebar({ entries, projects, selectedDate }: Proj
 
       items.forEach((item) => {
         if (!item.projectId) {
+          nextUnassignedItems += 1;
           return;
         }
 
@@ -42,78 +47,159 @@ export default function ProjectSidebar({ entries, projects, selectedDate }: Proj
 
     return {
       activeDays: nextActiveDays,
-      projectUsageById: usageById
+      projectUsageById: usageById,
+      unassignedItems: nextUnassignedItems
     };
   }, [entries]);
-  const selectedNotes = selectedEntry?.notes.length ?? 0;
-  const selectedTasks = selectedEntry?.tasks.length ?? 0;
+
+  const handleCreateProject = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const saved = await onCreateProject(projectName);
+    if (saved) {
+      setProjectName('');
+    }
+  };
 
   return (
-    <aside className="workspace-panel project-sidebar" aria-labelledby="project-sidebar-title">
-      <div className="workspace-panel__header">
+    <aside
+      className={[
+        'grid min-h-full rounded-[24px] border border-[color:var(--color-line)] bg-white',
+        collapsed
+          ? 'grid-rows-[auto_minmax(0,1fr)] px-[10px] pb-3 pt-[14px]'
+          : 'grid-rows-[auto_auto_minmax(0,1fr)_auto] px-4 pb-4 pt-[18px]'
+      ].join(' ')}
+      aria-labelledby="project-sidebar-title"
+    >
+      <div className={collapsed ? 'grid gap-3 px-1 py-0' : 'grid gap-[10px] px-1.5 pt-1'}>
         <div>
-          <p className="workspace-panel__eyebrow">Projects</p>
-          <h2 id="project-sidebar-title">Studio index</h2>
+          {!collapsed ? (
+            <p className="mb-3 text-[12px] font-medium uppercase tracking-[0.18em] text-[color:var(--color-copy-muted)]">
+              Projects
+            </p>
+          ) : null}
+          <h2
+            id="project-sidebar-title"
+            className={collapsed ? 'sr-only' : 'text-[22px] leading-[26px] font-[330] text-[color:var(--color-ink)]'}
+          >
+            Projects
+          </h2>
         </div>
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center self-start rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)] text-base text-[color:var(--color-ink)] transition hover:bg-white"
+          aria-label={collapsed ? 'Expand projects sidebar' : 'Collapse projects sidebar'}
+          aria-pressed={collapsed}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? '»' : '«'}
+        </button>
+        {!collapsed ? (
+          <p className="text-sm leading-5 text-[color:var(--color-copy-muted)]">
+            {projects.length} loaded · {activeDays} active days
+          </p>
+        ) : null}
       </div>
 
-      <div className="project-sidebar__stats">
-        <StatCard label="Loaded" value={`${projects.length}`} />
-        <StatCard label="Active days" value={`${activeDays}`} />
-        <StatCard label="Selected" value={selectedDate} />
-      </div>
+      {!collapsed ? (
+        <form className="mt-4 grid gap-3" onSubmit={handleCreateProject}>
+          <label className="grid gap-2">
+            <span className="text-[12px] font-medium uppercase tracking-[0.12em] text-[color:var(--color-copy-muted)]">
+              New project
+            </span>
+            <input
+              aria-label="Quick project name"
+              placeholder="Add a project"
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+              className="h-11 rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 text-base text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={projectName.trim().length === 0}
+            className="inline-flex h-11 items-center justify-center rounded-[10px] bg-[color:var(--color-ink)] px-5 text-base font-medium text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Add
+          </button>
+        </form>
+      ) : null}
 
-      <section className="project-sidebar__focus" aria-label="Selected day summary">
-        <p className="project-sidebar__focus-label">Selected day summary</p>
-        <p className="project-sidebar__focus-date">{selectedDate}</p>
-        <p className="project-sidebar__focus-copy">
-          {selectedNotes} note{selectedNotes === 1 ? '' : 's'} and {selectedTasks} task
-          {selectedTasks === 1 ? '' : 's'} linked to this day.
-        </p>
-      </section>
-
-      <div className="project-sidebar__list" role="list" aria-label="Projects">
+      <div className={collapsed ? 'mt-4 grid content-start gap-2' : 'mt-5 grid content-start gap-2'} role="list" aria-label="Projects">
+        <button
+          type="button"
+          className={[
+            'inline-flex min-h-11 items-center rounded-full border px-4 text-left text-sm leading-5 transition',
+            activeProjectId === null
+              ? 'border-[color:var(--color-ink)] bg-[color:var(--color-paper-muted)] text-[color:var(--color-ink)]'
+              : 'border-[color:var(--color-line)] bg-white text-[color:var(--color-copy-muted)] hover:text-[color:var(--color-ink)]',
+            collapsed ? 'justify-center px-0' : ''
+          ].join(' ')}
+          onClick={() => onSelectProject(null)}
+        >
+          {collapsed ? 'All' : 'All projects'}
+        </button>
         {projects.length === 0 ? (
-          <p className="project-sidebar__empty">No projects yet. Add one to start organizing days.</p>
+          <p className={collapsed ? 'px-1 text-center text-xs leading-4 text-[color:var(--color-copy-muted)]' : 'text-sm leading-5 text-[color:var(--color-copy-muted)]'}>
+            {collapsed ? 'No projects' : 'No projects yet. Add one to start organizing days.'}
+          </p>
         ) : (
           projects.map((project, index) => {
             const linkedItems = projectUsageById.get(project.id) ?? 0;
-            const isSelected = selectedProjectIds.has(project.id);
+            const isActiveFilter = activeProjectId === project.id;
 
             return (
-              <article
+              <button
                 key={project.id}
-                className={`project-sidebar__item${isSelected ? ' project-sidebar__item--selected' : ''}`}
-                role="listitem"
+                type="button"
+                aria-label={project.name}
+                className={[
+                  'flex min-h-14 items-start gap-3 rounded-[16px] border px-3 py-3 text-left transition',
+                  isActiveFilter
+                    ? 'border-[color:var(--color-ink)] bg-[color:var(--color-paper-muted)]'
+                    : 'border-[color:var(--color-line)] bg-white hover:bg-[color:var(--color-paper-muted)]/60',
+                  collapsed ? 'justify-center px-2' : ''
+                ].join(' ')}
+                onClick={() => onSelectProject(isActiveFilter ? null : project.id)}
               >
                 <span
-                  className="project-sidebar__swatch"
-                  style={{ backgroundColor: project.color ?? FALLBACK_SWATCHES[index % FALLBACK_SWATCHES.length] }}
+                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: project.color ?? FALLBACK_SWATCHES[index % FALLBACK_SWATCHES.length]
+                  }}
                   aria-hidden="true"
                 />
-                <div className="project-sidebar__content">
-                  <div className="project-sidebar__row">
-                    <h3 className="project-sidebar__title">{project.name}</h3>
-                    {isSelected ? <span className="project-sidebar__pill">Selected day</span> : null}
+                <div className={collapsed ? 'hidden' : 'min-w-0 flex-1'}>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="truncate text-base font-medium text-[color:var(--color-ink)]">
+                      {project.name}
+                    </h3>
+                    {isActiveFilter ? (
+                      <span className="rounded-full bg-white px-3 py-1 text-[12px] font-medium text-[color:var(--color-copy-muted)]">
+                        Open
+                      </span>
+                    ) : null}
                   </div>
-                  <p className="project-sidebar__meta">
-                    {linkedItems} linked item{linkedItems === 1 ? '' : 's'}
+                  <p className="mt-1 text-sm leading-5 text-[color:var(--color-copy-muted)]">
+                    {linkedItems} item{linkedItems === 1 ? '' : 's'}
                   </p>
                 </div>
-              </article>
+                {collapsed ? (
+                  <span className="text-base font-medium text-[color:var(--color-ink)]">
+                    {project.name.charAt(0).toUpperCase()}
+                  </span>
+                ) : null}
+              </button>
             );
           })
         )}
       </div>
-    </aside>
-  );
-}
 
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="project-sidebar__stat">
-      <p>{label}</p>
-      <strong>{value}</strong>
-    </div>
+      {!collapsed ? (
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-[color:var(--color-line)] pt-4 text-[12px] uppercase tracking-[0.08em] text-[color:var(--color-copy-muted)]">
+          <span>{unassignedItems} unassigned items</span>
+          <span>Local JSON</span>
+        </div>
+      ) : null}
+    </aside>
   );
 }

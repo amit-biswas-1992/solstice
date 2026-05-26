@@ -9,6 +9,7 @@ import {
   unlockStoreAtRoot
 } from '../../electron/ipc/storageIpc';
 import { resolveStorePaths } from '../../electron/storage/appPaths';
+import { pinPayloadSchema, unlockedStoreSnapshotSchema } from '../types/ipc';
 
 const testRoots: string[] = [];
 
@@ -282,5 +283,53 @@ describe('storageIpc auth bootstrap contract', () => {
 
     await expect(loadBootstrapStateFromRoot(root)).rejects.toThrow(/missing name/i);
     await expect(unlockStoreAtRoot(root, '4321')).rejects.toThrow(/missing name/i);
+  });
+
+  it('rejects malformed IPC unlock payloads before they reach auth logic', () => {
+    expect(() => pinPayloadSchema.parse('')).toThrow(/too small/i);
+    expect(() => pinPayloadSchema.parse(4321)).toThrow();
+  });
+
+  it('rejects malformed IPC save payloads before they reach storage writes', () => {
+    expect(() =>
+      unlockedStoreSnapshotSchema.parse({
+        settings: {
+          lastOpenedMonth: 'May 2026',
+          lastSelectedDate: '2026-05-25'
+        },
+        projects: [],
+        entries: {}
+      })
+    ).toThrow(/month key/i);
+
+    expect(() =>
+      unlockedStoreSnapshotSchema.parse({
+        settings: {
+          lastOpenedMonth: '2026-05',
+          lastSelectedDate: '2026-05-25'
+        },
+        projects: [
+          {
+            id: 'project-alpha',
+            name: 'Alpha',
+            createdAt: '2026-05-25T10:00:00.000Z',
+            updatedAt: '2026-05-25T10:00:00.000Z'
+          }
+        ],
+        entries: {
+          '2026-05-27': {
+            notes: [
+              {
+                id: 'note-1',
+                text: 'Bad note payload',
+                createdAt: 'not-a-timestamp',
+                updatedAt: '2026-05-27T08:00:00.000Z'
+              }
+            ],
+            tasks: []
+          }
+        }
+      })
+    ).toThrow();
   });
 });

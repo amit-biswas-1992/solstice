@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import { resolveSnapshotPaths, resolveStorePaths } from './appPaths';
+import { resolveSnapshotPaths, resolveStorePaths } from './appPaths.js';
 import type {
   DayEntry,
   EntriesByDate,

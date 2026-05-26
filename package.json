@@ -1,9 +1,30 @@
 {
-  "name": "daily-notes-desktop",
+  "name": "solstice",
   "version": "0.1.0",
-  "private": true,
+  "description": "A calm, local-first daily planner. Notes and tasks organized by day, not by folder.",
+  "author": "Amit Biswas",
+  "license": "MIT",
+  "homepage": "https://github.com/amit-biswas-1992/solstice",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amit-biswas-1992/solstice.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amit-biswas-1992/solstice/issues"
+  },
+  "keywords": [
+    "daily-notes",
+    "planner",
+    "desktop",
+    "electron",
+    "local-first",
+    "tasks",
+    "productivity",
+    "calendar",
+    "note-taking",
+    "day-planner"
+  ],
   "main": "dist-electron/electron/main.js",
-  "type": "module",
   "scripts": {
     "clean:electron": "node -e \"require('node:fs').rmSync('dist-electron', { recursive: true, force: true })\"",
     "dev": "vite",
@@ -14,15 +35,20 @@
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests",
-    "smoke": "playwright test",
-    "package": "npm run build && electron-builder"
+    "smoke": "npm run build && playwright test",
+    "package": "npm run build && electron-builder",
+    "demo:capture": "node scripts/capture-demo-assets.mjs",
+    "demo:video": "remotion render remotion/index.ts DailyNotesDesktopDemo artifacts/solstice-demo.mp4"
   },
   "dependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.0",
+    "@remotion/cli": "^4.0.467",
+    "@tailwindcss/vite": "^4.3.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
@@ -35,6 +61,8 @@
     "electron-builder": "^26.0.12",
     "jsdom": "^26.1.0",
     "nodemon": "^3.1.10",
+    "remotion": "^4.0.467",
+    "tailwindcss": "^4.3.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.2.1",

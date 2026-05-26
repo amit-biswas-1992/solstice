@@ -10,6 +10,9 @@ interface PinLockScreenProps {
   summary: StoreSummary;
 }
 
+const summaryCardClass =
+  'rounded-[18px] border border-[color:var(--color-line)] bg-white/70 px-4 py-3';
+
 export default function PinLockScreen({
   appVersion,
   errorMessage,
@@ -26,87 +29,77 @@ export default function PinLockScreen({
   };
 
   return (
-    <main className="app-shell">
-      <section className="hero-panel" aria-labelledby="pin-lock-title">
-        <p className="eyebrow">Locked Workspace</p>
-        <h1 id="pin-lock-title">Unlock Daily Notes</h1>
-        <p className="lede">
-          Enter your PIN to load the local store snapshot and continue from your
-          last workspace checkpoint.
+    <main className="flex min-h-screen items-stretch justify-center p-10">
+      <section
+        className="w-full max-w-[720px] rounded-[32px] border border-[color:var(--color-line)] bg-white p-10 shadow-[0_16px_48px_rgba(20,20,19,0.06)]"
+        aria-labelledby="pin-lock-title"
+      >
+        <p className="mb-3 text-[12px] font-medium uppercase tracking-[0.18em] text-[color:var(--color-copy-muted)]">
+          Locked workspace
         </p>
-        <form onSubmit={handleSubmit} style={{ marginTop: 28 }}>
-          <label
-            htmlFor="pin-code"
-            style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6f7f8e' }}
-          >
-            PIN Code
+        <h1
+          id="pin-lock-title"
+          className="font-[var(--font-serif)] text-[clamp(2.6rem,6vw,4rem)] leading-[0.96] font-[330] text-[color:var(--color-ink)]"
+        >
+          Unlock Daily Notes
+        </h1>
+        <p className="mt-[18px] max-w-[40rem] text-base leading-6 font-[330] text-[color:var(--color-copy-muted)]">
+          Enter your PIN to load the local store snapshot and continue from your last workspace
+          checkpoint.
+        </p>
+
+        <form className="mt-7 grid gap-4" onSubmit={handleSubmit}>
+          <label htmlFor="pin-code" className="grid gap-2">
+            <span className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--color-copy-muted)]">
+              PIN code
+            </span>
+            <input
+              id="pin-code"
+              type="password"
+              inputMode="numeric"
+              autoComplete="current-password"
+              value={pin}
+              onChange={(event) => {
+                if (errorMessage) {
+                  onClearError();
+                }
+                setPin(event.target.value);
+              }}
+              aria-describedby="pin-help"
+              className="h-12 w-full rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 text-base text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]"
+            />
           </label>
-          <input
-            id="pin-code"
-            type="password"
-            inputMode="numeric"
-            autoComplete="current-password"
-            value={pin}
-            onChange={(event) => {
-              if (errorMessage) {
-                onClearError();
-              }
-              setPin(event.target.value);
-            }}
-            aria-describedby="pin-help"
-            style={{
-              width: '100%',
-              marginTop: 10,
-              padding: '16px 18px',
-              fontSize: '1rem',
-              borderRadius: 16,
-              border: '1px solid rgba(28, 40, 51, 0.18)',
-              background: '#fffdfa'
-            }}
-          />
-          <p id="pin-help" style={{ margin: '10px 0 0', color: '#6f7f8e', fontSize: '0.92rem' }}>
+
+          <p id="pin-help" className="text-sm leading-5 text-[color:var(--color-copy-muted)]">
             Last opened month: {summary.lastOpenedMonth}
           </p>
+
           {errorMessage ? (
-            <p
-              role="alert"
-              style={{ margin: '14px 0 0', color: '#9f2d2d', fontWeight: 600 }}
-            >
+            <p role="alert" className="text-sm font-medium text-[color:var(--color-error)]">
               {errorMessage}
             </p>
           ) : null}
-          <button
-            type="submit"
-            disabled={isSubmitting || pin.trim().length === 0}
-            style={{
-              marginTop: 18,
-              padding: '14px 18px',
-              border: 0,
-              borderRadius: 16,
-              background: '#1f4e79',
-              color: '#f7f2e8',
-              fontSize: '1rem',
-              fontWeight: 700,
-              cursor: isSubmitting ? 'wait' : 'pointer',
-              opacity: isSubmitting || pin.trim().length === 0 ? 0.72 : 1
-            }}
-          >
-            {isSubmitting ? 'Unlocking...' : 'Unlock Workspace'}
-          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={isSubmitting || pin.trim().length === 0}
+              className="inline-flex h-11 items-center justify-center rounded-[10px] bg-[color:var(--color-ink)] px-5 text-base font-medium text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? 'Unlocking...' : 'Unlock workspace'}
+            </button>
+          </div>
         </form>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: 12,
-            marginTop: 24
-          }}
-        >
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <SummaryCard label="Projects" value={`${summary.projectCount}`} />
-          <SummaryCard label="Entry Days" value={`${summary.entryCount}`} />
-          <SummaryCard label="Selected Date" value={summary.lastSelectedDate} />
+          <SummaryCard label="Entry days" value={`${summary.entryCount}`} />
+          <SummaryCard label="Selected date" value={summary.lastSelectedDate} />
         </div>
-        <p className="build-tag">Bridge v{appVersion}</p>
+
+        <p className="mt-6 text-[12px] uppercase tracking-[0.08em] text-[color:var(--color-copy-muted)]">
+          Bridge v{appVersion}
+        </p>
       </section>
     </main>
   );
@@ -114,29 +107,11 @@ export default function PinLockScreen({
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      style={{
-        padding: '14px 16px',
-        borderRadius: 18,
-        background: 'rgba(255, 255, 255, 0.7)',
-        border: '1px solid rgba(28, 40, 51, 0.1)'
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: '0.78rem',
-          fontWeight: 700,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          color: '#8c5e34'
-        }}
-      >
+    <div className={summaryCardClass}>
+      <p className="m-0 text-[12px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-copy-muted)]">
         {label}
       </p>
-      <p style={{ margin: '8px 0 0', fontSize: '1rem', fontWeight: 600, color: '#1c2833' }}>
-        {value}
-      </p>
+      <p className="mt-2 text-base font-medium text-[color:var(--color-ink)]">{value}</p>
     </div>
   );
 }

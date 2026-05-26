@@ -112,7 +112,10 @@ describe('Day detail panel', () => {
     await user.click(screen.getByRole('button', { name: 'Delete task' }));
     expect(screen.queryByText('Draft release checklist')).not.toBeInTheDocument();
     expect(screen.getByText('Task deleted from the selected day.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /may 25, 2026\./i })).toHaveClass('day-card--empty');
+    expect(screen.getByRole('button', { name: /may 25, 2026\./i })).toHaveAttribute(
+      'data-empty',
+      'true'
+    );
 
     expect(onPersistStore).toHaveBeenCalledTimes(2);
     const lastSnapshot = onPersistStore.mock.calls.at(-1)?.[0];
@@ -164,7 +167,7 @@ describe('Day detail panel', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(screen.queryByRole('dialog', { name: 'Note editor' })).not.toBeInTheDocument();
-    expect(screen.getByText('Selected date: 2026-05-27')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected date: 2026-05-27')[0]).toBeInTheDocument();
     expect(screen.getByText('Ship shell layout and QA status')).toBeInTheDocument();
     expect(screen.getByText('Note moved to May 27, 2026.')).toBeInTheDocument();
 
@@ -200,7 +203,7 @@ describe('Day detail panel', () => {
 
     expect(screen.queryByLabelText('New note')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('Stale draft')).not.toBeInTheDocument();
-    expect(screen.getByText('Selected date: 2026-05-26')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected date: 2026-05-26')[0]).toBeInTheDocument();
     expect(onPersistStore).not.toHaveBeenCalled();
   });
 

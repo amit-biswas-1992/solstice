@@ -1,12 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DailyNotesDesktopApi } from '../src/types/desktopBridge';
-import { STORAGE_IPC_CHANNELS } from '../src/types/ipc';
+
+const IPC_CHANNELS = {
+  LOAD_STORE: 'storage:loadStore',
+  SAVE_STORE: 'storage:saveStore',
+  UNLOCK: 'auth:unlock'
+} as const;
 
 const api: DailyNotesDesktopApi = {
   version: '0.1.0',
-  loadStore: () => ipcRenderer.invoke(STORAGE_IPC_CHANNELS.loadStore),
-  saveStore: (store) => ipcRenderer.invoke(STORAGE_IPC_CHANNELS.saveStore, store),
-  unlock: (pin) => ipcRenderer.invoke(STORAGE_IPC_CHANNELS.unlock, pin)
+  loadStore: () => ipcRenderer.invoke(IPC_CHANNELS.LOAD_STORE),
+  saveStore: (store) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_STORE, store),
+  unlock: (pin) => ipcRenderer.invoke(IPC_CHANNELS.UNLOCK, pin)
 };
 
 contextBridge.exposeInMainWorld('dailyNotesDesktop', api);

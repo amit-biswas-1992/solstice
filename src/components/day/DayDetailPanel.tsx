@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatLongDateLabel } from '../../lib/date';
+import { createDateKey, formatLongDateLabel } from '../../lib/date';
 import type { EntriesByDate, Note, Project, Task } from '../../types/models';
 import StatusToast from '../common/StatusToast';
+import CommandBar from './CommandBar';
 import EntryPopupEditor from './EntryPopupEditor';
 import NotesSection from './NotesSection';
 import TasksSection from './TasksSection';
@@ -14,7 +15,10 @@ import {
 } from './dayDetailUtils';
 
 interface DayDetailPanelProps {
+  activeProjectId?: string | null;
+  activeProjectName?: string;
   entries: EntriesByDate;
+  onCommand: (input: string) => Promise<{ error?: string; message?: string; ok: boolean }>;
   onPersistEntries: (
     entries: EntriesByDate,
     options?: {
@@ -46,28 +50,47 @@ type PopupState =
 type StatusTone = 'error' | 'success';
 
 interface EntryDraft {
+  description?: string;
   projectId?: string;
   text: string;
+  url?: string;
 }
 
 interface PopupDraft extends EntryDraft {
   targetDate: string;
 }
 
+const sectionClass = 'rounded-[24px] border border-[color:var(--color-line)] bg-white px-5 py-5';
+
 export default function DayDetailPanel({
+  activeProjectId,
+  activeProjectName,
   entries,
+  onCommand,
   onPersistEntries,
   onSelectDate,
   projects,
   selectedDate
 }: DayDetailPanelProps) {
+  const [isRunningCommand, setIsRunningCommand] = useState(false);
   const [popupState, setPopupState] = useState<PopupState | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<StatusTone>('success');
+  const [showCommandBar, setShowCommandBar] = useState(false);
+
+  const isToday = selectedDate === createDateKey(new Date());
 
   const selectedEntry = entries[selectedDate];
-  const notes = selectedEntry?.notes ?? [];
-  const tasks = selectedEntry?.tasks ?? [];
+  const notes = useMemo(
+    () =>
+      (selectedEntry?.notes ?? []).filter((note) => !activeProjectId || note.projectId === activeProjectId),
+    [activeProjectId, selectedEntry]
+  );
+  const tasks = useMemo(
+    () =>
+      (selectedEntry?.tasks ?? []).filter((task) => !activeProjectId || task.projectId === activeProjectId),
+    [activeProjectId, selectedEntry]
+  );
   const openTaskCount = tasks.filter((task) => !task.done).length;
   const projectById = useMemo(
     () => new Map(projects.map((project) => [project.id, project])),
@@ -104,6 +127,28 @@ export default function DayDetailPanel({
     setPopupState(null);
   }, [selectedDate]);
 
+  const handleCommand = async (input: string) => {
+    setIsRunningCommand(true);
+    try {
+      const result = await onCommand(input);
+      if (!result.ok) {
+        setStatusTone('error');
+        setStatusMessage(result.error ?? 'Unable to apply that organizer command.');
+        return false;
+      }
+
+      setStatusTone('success');
+      setStatusMessage(result.message ?? 'Command saved to the workspace.');
+      return true;
+    } catch (error) {
+      setStatusTone('error');
+      setStatusMessage(error instanceof Error ? error.message : 'Unable to apply that organizer command.');
+      return false;
+    } finally {
+      setIsRunningCommand(false);
+    }
+  };
+
   const persistEntries = async (
     nextEntries: EntriesByDate,
     successMessage: string,
@@ -139,7 +184,7 @@ export default function DayDetailPanel({
         ...entry,
         notes: [...entry.notes, createNote(text, projectId)]
       })),
-      'Note added to the selected day.'
+      'Note added.'
     );
   };
 
@@ -158,17 +203,23 @@ export default function DayDetailPanel({
   const handleDeleteNote = async (noteId: string) => {
     return persistEntries(
       removeItemFromEntries(entries, selectedDate, 'notes', noteId),
-      'Note deleted from the selected day.'
+      'Note deleted.'
     );
   };
 
-  const handleAddTask = async ({ projectId, text }: EntryDraft) => {
+  const handleAddTask = async ({ projectId, text, description, url }: EntryDraft) => {
+    const newTask = createTask(text, projectId);
+    const enrichedTask = {
+      ...newTask,
+      description: description || undefined,
+      url: url || undefined
+    };
     return persistEntries(
       updateEntriesForDate(entries, selectedDate, (entry) => ({
         ...entry,
-        tasks: [...entry.tasks, createTask(text, projectId)]
+        tasks: [...entry.tasks, enrichedTask]
       })),
-      'Task added to the selected day.'
+      'Task added.'
     );
   };
 
@@ -187,7 +238,7 @@ export default function DayDetailPanel({
   const handleDeleteTask = async (taskId: string) => {
     return persistEntries(
       removeItemFromEntries(entries, selectedDate, 'tasks', taskId),
-      'Task deleted from the selected day.'
+      'Task deleted.'
     );
   };
 
@@ -200,7 +251,7 @@ export default function DayDetailPanel({
         done: !task.done,
         updatedAt: new Date().toISOString()
       })),
-      nextTask?.done ? 'Task marked open again.' : 'Task completed.'
+      nextTask?.done ? 'Task reopened.' : 'Task completed.'
     );
   };
 
@@ -267,43 +318,87 @@ export default function DayDetailPanel({
   };
 
   return (
-    <aside className="workspace-panel selected-day-panel" aria-labelledby="selected-day-panel-title">
-      <header className="workspace-panel__header">
-        <div>
-          <p className="workspace-panel__eyebrow">Selected day</p>
-          <h2 id="selected-day-panel-title">Day detail</h2>
+    <aside className="grid content-start gap-3" aria-labelledby="selected-day-panel-title">
+      {/* Day header */}
+      <header className={sectionClass}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 id="selected-day-panel-title" className="text-xl leading-7 font-medium text-[color:var(--color-ink)]">
+                {formatLongDateLabel(selectedDate)}
+              </h2>
+              {isToday && (
+                <span className="rounded-full bg-[color:var(--color-ink)] px-2 py-0.5 text-[10px] font-bold text-white">
+                  Today
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-sm text-[color:var(--color-copy-muted)]">
+              {notes.length} note{notes.length === 1 ? '' : 's'}, {openTaskCount} open task{openTaskCount === 1 ? '' : 's'}
+              {activeProjectName ? ` · ${activeProjectName}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="rounded-lg border border-[color:var(--color-line)] p-1.5 text-[color:var(--color-copy-muted)] transition hover:bg-[color:var(--color-paper-muted)] hover:text-[color:var(--color-ink)]"
+            onClick={() => setShowCommandBar((v) => !v)}
+            title="Command bar"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
-        <div className="workspace-panel__meta">
-          <span>{notes.length} notes</span>
-          <span>{tasks.length} tasks</span>
-        </div>
+
+        {/* Linked projects pills */}
+        {linkedProjects.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {linkedProjects.map((project) => (
+              <span key={project.id} className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)]/50 px-2.5 py-1 text-[11px] text-[color:var(--color-copy-muted)]">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: project.color ?? '#1f4e79' }}
+                  aria-hidden="true"
+                />
+                {project.name}
+              </span>
+            ))}
+          </div>
+        )}
       </header>
 
-      <section className="selected-day-panel__hero">
-        <p className="selected-day-panel__date">{formatLongDateLabel(selectedDate)}</p>
-        <p className="selected-day-panel__summary">
-          {notes.length} note{notes.length === 1 ? '' : 's'}, {tasks.length} task
-          {tasks.length === 1 ? '' : 's'}, and {openTaskCount} still open.
-        </p>
-      </section>
-
-      <NotesSection
-        notes={notes}
-        onAddNote={handleAddNote}
-        onDeleteNote={handleDeleteNote}
-        onOpenPopup={openPopupForNote}
-        onUpdateNote={handleUpdateNote}
-        projects={projects}
-        selectedDate={selectedDate}
-      />
+      {/* Command bar (collapsible) */}
+      {showCommandBar && (
+        <section className={sectionClass} aria-label="Organizer bar">
+          <h3 className="mb-2 text-sm font-medium text-[color:var(--color-ink)]">Quick command</h3>
+          <CommandBar
+            activeProjectName={activeProjectName}
+            isBusy={isRunningCommand}
+            onSubmit={handleCommand}
+            selectedDate={selectedDate}
+          />
+        </section>
+      )}
 
       <TasksSection
+        defaultProjectId={activeProjectId ?? undefined}
         tasks={tasks}
         onAddTask={handleAddTask}
         onDeleteTask={handleDeleteTask}
         onOpenPopup={openPopupForTask}
         onToggleTask={handleToggleTask}
         onUpdateTask={handleUpdateTask}
+        projects={projects}
+        selectedDate={selectedDate}
+      />
+
+      <NotesSection
+        defaultProjectId={activeProjectId ?? undefined}
+        notes={notes}
+        onAddNote={handleAddNote}
+        onDeleteNote={handleDeleteNote}
+        onOpenPopup={openPopupForNote}
+        onUpdateNote={handleUpdateNote}
         projects={projects}
         selectedDate={selectedDate}
       />
@@ -321,29 +416,6 @@ export default function DayDetailPanel({
       />
 
       <StatusToast message={statusMessage} tone={statusTone} />
-
-      <section className="selected-day-panel__section" aria-label="Linked projects">
-        <div className="selected-day-panel__section-header">
-          <h3>Linked projects</h3>
-          <span>{linkedProjects.length}</span>
-        </div>
-        {linkedProjects.length === 0 ? (
-          <p className="selected-day-panel__empty">No project associations on the selected day.</p>
-        ) : (
-          <ul className="selected-day-panel__project-list">
-            {linkedProjects.map((project) => (
-              <li key={project.id}>
-                <span
-                  className="selected-day-panel__project-dot"
-                  style={{ backgroundColor: project.color ?? '#1f4e79' }}
-                  aria-hidden="true"
-                />
-                <span className="selected-day-panel__project-name">{project.name}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </aside>
   );
 }

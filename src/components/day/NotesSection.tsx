@@ -7,6 +7,7 @@ interface NoteDraft {
 }
 
 interface NotesSectionProps {
+  defaultProjectId?: string;
   notes: Note[];
   onAddNote: (draft: NoteDraft) => Promise<boolean>;
   onDeleteNote: (noteId: string) => Promise<boolean>;
@@ -18,7 +19,12 @@ interface NotesSectionProps {
 
 const normalizeProjectId = (projectId: string) => (projectId.length > 0 ? projectId : undefined);
 
+const fieldClass =
+  'h-10 rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 text-sm text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]';
+const sectionClass = 'rounded-[24px] border border-[color:var(--color-line)] bg-white px-5 py-5';
+
 export default function NotesSection({
+  defaultProjectId,
   notes,
   onAddNote,
   onDeleteNote,
@@ -46,14 +52,14 @@ export default function NotesSection({
 
   const resetComposer = () => {
     setDraftText('');
-    setDraftProjectId('');
+    setDraftProjectId(defaultProjectId ?? '');
     setIsAdding(false);
   };
 
   useEffect(() => {
     resetInlineState();
     resetComposer();
-  }, [selectedDate]);
+  }, [defaultProjectId, selectedDate]);
 
   const handleAddNote = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -109,38 +115,75 @@ export default function NotesSection({
     }
   };
 
+  const renderLinkifiedText = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) =>
+      urlRegex.test(part) ? (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[color:var(--color-line-strong)] underline-offset-2 hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part.replace(/^https?:\/\//, '').slice(0, 40)}
+          {part.replace(/^https?:\/\//, '').length > 40 ? '...' : ''}
+        </a>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  };
+
   return (
-    <section className="selected-day-panel__section" aria-label="Notes">
-      <div className="selected-day-panel__section-header">
-        <h3>Notes</h3>
-        <span>{notes.length}</span>
+    <section className={sectionClass} aria-label="Notes">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-lg leading-6 font-medium text-[color:var(--color-ink)]">Notes</h3>
+        <div className="flex items-center gap-2">
+          {notes.length > 0 && (
+            <span className="rounded-full bg-[color:var(--color-paper-muted)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--color-copy-muted)]">
+              {notes.length}
+            </span>
+          )}
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[color:var(--color-line)] px-3 text-xs font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-paper-muted)]"
+            onClick={() => {
+              setIsAdding((current) => !current);
+              resetInlineState();
+              setDraftProjectId(defaultProjectId ?? '');
+            }}
+          >
+            {isAdding ? (
+              'Cancel'
+            ) : (
+              <>
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path d="M12 5v14m-7-7h14" strokeLinecap="round" />
+                </svg>
+                Add note
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => {
-          setIsAdding((current) => !current);
-          resetInlineState();
-        }}
-      >
-        {isAdding ? 'Close note composer' : 'Add note'}
-      </button>
-
-      {isAdding ? (
-        <form className="selected-day-panel__inline-form" onKeyDown={handleEscape} onSubmit={handleAddNote}>
-          <label className="selected-day-panel__field">
-            <span>New note</span>
-            <input
-              aria-label="New note"
-              placeholder="Capture a quick note"
-              value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
-            />
-          </label>
-          <label className="selected-day-panel__field">
-            <span>Project tag</span>
+      {isAdding && (
+        <form className="mt-3 grid gap-2" onKeyDown={handleEscape} onSubmit={handleAddNote}>
+          <textarea
+            aria-label="New note"
+            autoFocus
+            className="min-h-[72px] rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 py-2 text-sm text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]"
+            placeholder="Write a note..."
+            value={draftText}
+            onChange={(event) => setDraftText(event.target.value)}
+          />
+          <div className="flex items-center gap-2">
             <select
               aria-label="New note project tag"
+              className={`${fieldClass} flex-1`}
               value={draftProjectId}
               onChange={(event) => setDraftProjectId(event.target.value)}
             >
@@ -151,42 +194,34 @@ export default function NotesSection({
                 </option>
               ))}
             </select>
-          </label>
-          <div className="selected-day-panel__actions">
-            <button type="button" onClick={resetComposer}>
-              Cancel
-            </button>
-            <button type="submit" disabled={draftText.trim().length === 0}>
-              Save note
+            <button type="submit" className="h-10 rounded-[10px] bg-[color:var(--color-ink)] px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60" disabled={draftText.trim().length === 0}>
+              Add
             </button>
           </div>
         </form>
-      ) : null}
+      )}
 
       {notes.length === 0 ? (
-        <p className="selected-day-panel__empty">No notes for this day yet.</p>
+        <p className="mt-3 text-sm leading-5 text-[color:var(--color-copy-muted)]">
+          No notes for this day yet.
+        </p>
       ) : (
-        <ul className="selected-day-panel__list">
+        <ul className="mt-3 grid gap-1">
           {notes.map((note) => (
-            <li key={note.id} className="selected-day-panel__list-item">
+            <li key={note.id} className="group rounded-[12px] p-2.5 transition hover:bg-[color:var(--color-paper-muted)]/40">
               {editingNoteId === note.id ? (
-                <form
-                  className="selected-day-panel__inline-form"
-                  onKeyDown={handleEscape}
-                  onSubmit={handleSaveEdit}
-                >
-                  <label className="selected-day-panel__field">
-                    <span>Edit note</span>
-                    <input
-                      aria-label={`Edit note ${note.text}`}
-                      value={editingText}
-                      onChange={(event) => setEditingText(event.target.value)}
-                    />
-                  </label>
-                  <label className="selected-day-panel__field">
-                    <span>Project tag</span>
+                <form className="grid gap-2" onKeyDown={handleEscape} onSubmit={handleSaveEdit}>
+                  <textarea
+                    aria-label={`Edit note ${note.text}`}
+                    autoFocus
+                    className="min-h-[60px] rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 py-2 text-sm text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]"
+                    value={editingText}
+                    onChange={(event) => setEditingText(event.target.value)}
+                  />
+                  <div className="flex gap-2">
                     <select
                       aria-label={`Edit project tag for ${note.text}`}
+                      className={`${fieldClass} flex-1`}
                       value={editingProjectId}
                       onChange={(event) => setEditingProjectId(event.target.value)}
                     >
@@ -197,23 +232,21 @@ export default function NotesSection({
                         </option>
                       ))}
                     </select>
-                  </label>
-                  <div className="selected-day-panel__actions">
-                    <button type="button" onClick={resetInlineState}>
+                    <button type="button" className="h-10 rounded-[10px] border border-[color:var(--color-line)] px-3 text-sm text-[color:var(--color-copy-muted)] transition hover:bg-[color:var(--color-paper-muted)]" onClick={resetInlineState}>
                       Cancel
                     </button>
-                    <button type="submit" disabled={editingText.trim().length === 0}>
+                    <button type="submit" className="h-10 rounded-[10px] bg-[color:var(--color-ink)] px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60" disabled={editingText.trim().length === 0}>
                       Save
                     </button>
                   </div>
                 </form>
               ) : (
-                <>
-                  <div className="selected-day-panel__item-main">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-copy-muted)]" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
                     <button
                       type="button"
-                      className="selected-day-panel__item-text selected-day-panel__item-text-button"
-                      aria-label={`Inline edit note ${note.text}`}
+                      className="text-left text-sm leading-5 text-[color:var(--color-ink)]"
                       onClick={() => {
                         setIsAdding(false);
                         setEditingNoteId(note.id);
@@ -221,21 +254,35 @@ export default function NotesSection({
                         setEditingProjectId(note.projectId ?? '');
                       }}
                     >
-                      {note.text}
+                      {renderLinkifiedText(note.text)}
                     </button>
-                    <span className="selected-day-panel__project-pill">
-                      {projectById.get(note.projectId ?? '') ?? 'No project'}
-                    </span>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {note.projectId && (
+                        <span className="inline-flex items-center rounded-full bg-[color:var(--color-paper-muted)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--color-copy-muted)]">
+                          {projectById.get(note.projectId) ?? 'Unknown'}
+                        </span>
+                      )}
+                      {note.tags && note.tags.length > 0 && note.tags.map((tag) => (
+                        <span key={tag} className="inline-flex items-center rounded-full bg-[color:var(--color-paper-muted)] px-2 py-0.5 text-[10px] text-[color:var(--color-copy-muted)]">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="selected-day-panel__actions selected-day-panel__actions--row">
-                    <button type="button" onClick={() => onOpenPopup(note)}>
-                      Open editor
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                    <button type="button" className="rounded-md p-1 text-[color:var(--color-copy-muted)] transition hover:bg-[color:var(--color-paper-muted)] hover:text-[color:var(--color-ink)]" onClick={() => onOpenPopup(note)} title="Edit">
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeLinecap="round" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" />
+                      </svg>
                     </button>
-                    <button type="button" onClick={() => void onDeleteNote(note.id)}>
-                      Delete note
+                    <button type="button" className="rounded-md p-1 text-[color:var(--color-copy-muted)] transition hover:bg-red-50 hover:text-[color:var(--color-error)]" onClick={() => void onDeleteNote(note.id)} title="Delete">
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
+                      </svg>
                     </button>
                   </div>
-                </>
+                </div>
               )}
             </li>
           ))}

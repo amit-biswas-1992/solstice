@@ -1,14 +1,14 @@
 import { app, ipcMain } from 'electron';
-import { bootstrapStore, inspectStore, writeStore } from '../storage/fileStore';
-import { resolveAppDataStorePaths } from '../storage/appPaths';
+import { bootstrapStore, inspectStore, writeStore } from '../storage/fileStore.js';
+import { resolveAppDataStorePaths } from '../storage/appPaths.js';
 import type {
   StoreBootstrap,
   StoreSummary,
   UnlockResult,
   UnlockedStoreSnapshot
 } from '../../src/types/desktopBridge';
-import { STORAGE_IPC_CHANNELS } from '../../src/types/ipc';
 import type { StoreSnapshot } from '../../src/types/models';
+import { IPC, pinPayloadSchema, unlockedStoreSnapshotSchema } from '../../src/types/ipc';
 
 const unlockedRoots = new Set<string>();
 const AUTH_REQUIRED_MESSAGE = 'Authentication required. Unlock the workspace first.';
@@ -138,17 +138,23 @@ export const saveUnlockedStoreAtRoot = async (
 };
 
 export const registerStorageIpc = () => {
-  ipcMain.removeHandler(STORAGE_IPC_CHANNELS.loadStore);
-  ipcMain.removeHandler(STORAGE_IPC_CHANNELS.saveStore);
-  ipcMain.removeHandler(STORAGE_IPC_CHANNELS.unlock);
+  ipcMain.removeHandler(IPC.LOAD_STORE);
+  ipcMain.removeHandler(IPC.SAVE_STORE);
+  ipcMain.removeHandler(IPC.UNLOCK);
 
-  ipcMain.handle(STORAGE_IPC_CHANNELS.loadStore, () =>
+  ipcMain.handle(IPC.LOAD_STORE, () =>
     loadBootstrapStateFromRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir)
   );
-  ipcMain.handle(STORAGE_IPC_CHANNELS.saveStore, (_event, snapshot: UnlockedStoreSnapshot) =>
-    saveUnlockedStoreAtRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir, snapshot)
+  ipcMain.handle(IPC.SAVE_STORE, (_event, snapshot: unknown) =>
+    saveUnlockedStoreAtRoot(
+      resolveAppDataStorePaths(app.getPath('userData')).rootDir,
+      unlockedStoreSnapshotSchema.parse(snapshot)
+    )
   );
-  ipcMain.handle(STORAGE_IPC_CHANNELS.unlock, (_event, pin: string) =>
-    unlockStoreAtRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir, pin)
+  ipcMain.handle(IPC.UNLOCK, (_event, pin: unknown) =>
+    unlockStoreAtRoot(
+      resolveAppDataStorePaths(app.getPath('userData')).rootDir,
+      pinPayloadSchema.parse(pin)
+    )
   );
 };

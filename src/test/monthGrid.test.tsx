@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import WorkspaceShell from '../components/layout/WorkspaceShell';
 import type { UnlockedStoreSnapshot } from '../types/desktopBridge';
 
@@ -94,8 +94,8 @@ describe('Workspace month grid', () => {
     render(<WorkspaceShell appVersion="0.1.0" store={store} />);
 
     expect(screen.getByRole('heading', { name: /daily notes workspace/i })).toBeInTheDocument();
-    expect(screen.getByText('Selected date: 2026-05-25')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /studio index/i })).toBeInTheDocument();
+    expect(screen.getAllByText('Selected date: 2026-05-25')[0]).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^projects$/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /day detail/i })).toBeInTheDocument();
 
     const selectedDay = screen.getByRole('button', {
@@ -108,15 +108,16 @@ describe('Workspace month grid', () => {
       name: /may 24, 2026\. no entries/i
     });
 
-    expect(selectedDay).toHaveClass('day-card--active', 'day-card--selected');
-    expect(nextActiveDay).toHaveClass('day-card--active');
-    expect(emptyDay).toHaveClass('day-card--empty');
+    expect(selectedDay).toHaveAttribute('data-active', 'true');
+    expect(selectedDay).toHaveAttribute('data-selected', 'true');
+    expect(nextActiveDay).toHaveAttribute('data-active', 'true');
+    expect(emptyDay).toHaveAttribute('data-empty', 'true');
 
     await user.click(nextActiveDay);
 
-    expect(screen.getByText('Selected date: 2026-05-26')).toBeInTheDocument();
-    expect(nextActiveDay).toHaveClass('day-card--selected');
-    expect(selectedDay).not.toHaveClass('day-card--selected');
+    expect(screen.getAllByText('Selected date: 2026-05-26')[0]).toBeInTheDocument();
+    expect(nextActiveDay).toHaveAttribute('data-selected', 'true');
+    expect(selectedDay).toHaveAttribute('data-selected', 'false');
     expect(screen.getByText(/review active day styling/i)).toBeInTheDocument();
   });
 
@@ -130,18 +131,19 @@ describe('Workspace month grid', () => {
     await user.click(screen.getByRole('button', { name: /next month/i }));
 
     expect(screen.getByRole('grid', { name: 'June 2026' })).toBeInTheDocument();
-    expect(screen.getByText('Selected date: 2026-06-25')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected date: 2026-06-25')[0]).toBeInTheDocument();
     expect(screen.getByText(/release notes ready/i)).toBeInTheDocument();
 
     const juneDay = screen.getByRole('button', {
       name: /june 25, 2026\./i
     });
-    expect(juneDay).toHaveClass('day-card--selected', 'day-card--active');
+    expect(juneDay).toHaveAttribute('data-selected', 'true');
+    expect(juneDay).toHaveAttribute('data-active', 'true');
 
     await user.click(screen.getByRole('button', { name: /previous month/i }));
 
     expect(screen.getByRole('grid', { name: 'May 2026' })).toBeInTheDocument();
-    expect(screen.getByText('Selected date: 2026-05-25')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected date: 2026-05-25')[0]).toBeInTheDocument();
   });
 
   it('resyncs local month and selected-day state when the parent store snapshot changes', async () => {
@@ -150,7 +152,7 @@ describe('Workspace month grid', () => {
 
     await user.click(screen.getByRole('button', { name: /next month/i }));
     expect(screen.getByRole('grid', { name: 'June 2026' })).toBeInTheDocument();
-    expect(screen.getByText('Selected date: 2026-06-25')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected date: 2026-06-25')[0]).toBeInTheDocument();
 
     rerender(
       <WorkspaceShell
@@ -166,7 +168,60 @@ describe('Workspace month grid', () => {
     );
 
     expect(screen.getByRole('grid', { name: 'April 2026' })).toBeInTheDocument();
-    expect(screen.getByText('Selected date: 2026-04-25')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected date: 2026-04-25')[0]).toBeInTheDocument();
     expect(screen.getByText(/archive review/i)).toBeInTheDocument();
+  });
+
+  it('creates project-organized work from the organizer bar and filters the month grid by project', async () => {
+    const user = userEvent.setup();
+    const onPersistStore = vi.fn<(snapshot: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>>().mockImplementation(
+      async (snapshot) => snapshot
+    );
+
+    render(<WorkspaceShell appVersion="0.1.0" onPersistStore={onPersistStore} store={store} />);
+
+    await user.type(
+      screen.getByLabelText('Organizer command'),
+      'add task Plan launch assets for Project Gamma on 2026-05-27'
+    );
+    await user.click(screen.getByRole('button', { name: 'Organize' }));
+
+    expect(screen.getAllByText('Selected date: 2026-05-27')[0]).toBeInTheDocument();
+    expect(screen.getByText(/plan launch assets/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /project gamma/i })).toBeInTheDocument();
+
+    const savedSnapshot = onPersistStore.mock.calls.at(-1)?.[0];
+    expect(savedSnapshot?.projects.some((project) => project.name === 'Project Gamma')).toBe(true);
+    expect(savedSnapshot?.entries['2026-05-27']?.tasks[0]?.text).toBe('Plan launch assets');
+
+    await user.click(screen.getByRole('button', { name: /project gamma/i }));
+
+    expect(screen.getByText('Filter: Project Gamma')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /may 25, 2026\./i })).toHaveAttribute(
+      'data-filtered-dim',
+      'true'
+    );
+    expect(screen.getByRole('button', { name: /may 27, 2026\./i })).toHaveAttribute(
+      'data-filter-match',
+      'true'
+    );
+  });
+
+  it('collapses and expands the left project sidebar', async () => {
+    const user = userEvent.setup();
+
+    render(<WorkspaceShell appVersion="0.1.0" store={store} />);
+
+    const collapseButton = screen.getByRole('button', { name: /collapse projects sidebar/i });
+    await user.click(collapseButton);
+
+    expect(screen.queryByLabelText('Quick project name')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /expand projects sidebar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /project gamma|alpha/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /expand projects sidebar/i }));
+
+    expect(screen.getByLabelText('Quick project name')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /collapse projects sidebar/i })).toBeInTheDocument();
   });
 });
