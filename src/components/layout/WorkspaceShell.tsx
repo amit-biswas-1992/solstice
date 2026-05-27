@@ -517,11 +517,12 @@ export default function WorkspaceShell({ appVersion, onPersistStore, store }: Wo
             'grid items-stretch gap-4 lg:gap-6',
             viewMode === 'calendar'
               ? [
-                  '2xl:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(320px,380px)]',
-                  'xl:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] xl:[&>*:last-child]:col-span-2',
+                'xl:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(320px,380px)]',
+                  'xl:[&>*:last-child]:col-span-1',
+                  'lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:[&>*:last-child]:col-span-2',
                   'md:grid-cols-[minmax(200px,240px)_minmax(0,1fr)]',
                   isProjectSidebarCollapsed
-                    ? '2xl:grid-cols-[72px_minmax(0,1fr)_minmax(320px,380px)] xl:grid-cols-[72px_minmax(0,1fr)] md:grid-cols-[72px_minmax(0,1fr)]'
+                    ? 'xl:grid-cols-[72px_minmax(0,1fr)_minmax(320px,380px)] lg:grid-cols-[72px_minmax(0,1fr)] md:grid-cols-[72px_minmax(0,1fr)]'
                     : ''
                 ].join(' ')
               : 'grid-cols-1'

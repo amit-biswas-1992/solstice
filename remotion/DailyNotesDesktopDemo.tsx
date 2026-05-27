@@ -16,40 +16,41 @@ const palette = {
   page: '#f8f8f6',
   paper: '#ffffff',
   paperMuted: '#f3f1ec',
-  line: 'rgba(31, 30, 29, 0.18)'
+  line: 'rgba(31, 30, 29, 0.18)',
+  accent: '#1f4e79'
 };
 
 const shots = [
   {
     src: staticFile('demo-assets/pin-lock.png'),
-    eyebrow: 'Step 1',
-    title: 'Unlock the workspace',
-    body: 'A static local PIN keeps the app fast and fully offline.',
-    start: 90,
-    duration: 135
-  },
-  {
-    src: staticFile('demo-assets/workspace-overview.png'),
-    eyebrow: 'Step 2',
-    title: 'Scan the month as cards',
-    body: 'Square day cards keep notes and tasks visible without turning the month into a spreadsheet.',
-    start: 225,
+    eyebrow: 'Privacy First',
+    title: 'Unlock your day',
+    body: 'A simple PIN keeps your workspace private. No accounts, no cloud, no tracking.',
+    start: 120,
     duration: 150
   },
   {
+    src: staticFile('demo-assets/workspace-overview.png'),
+    eyebrow: 'Calendar View',
+    title: 'Your month at a glance',
+    body: 'Every day is a card. See activity dots, task completion, and navigate naturally.',
+    start: 270,
+    duration: 165
+  },
+  {
     src: staticFile('demo-assets/project-filter.png'),
-    eyebrow: 'Step 3',
-    title: 'Filter by project instantly',
-    body: 'The left rail behaves like a real project workspace, not a stats sidebar.',
-    start: 375,
-    duration: 135
+    eyebrow: 'Projects',
+    title: 'Focus on what matters',
+    body: 'Filter the entire workspace by project. The sidebar collapses when you don\'t need it.',
+    start: 435,
+    duration: 150
   },
   {
     src: staticFile('demo-assets/popup-editor.png'),
-    eyebrow: 'Step 4',
-    title: 'Edit inline or with a popup',
-    body: 'Quick changes stay inline. Longer edits, moves, and retagging open a focused editor.',
-    start: 510,
+    eyebrow: 'Quick Editing',
+    title: 'Edit inline or in a popup',
+    body: 'Quick changes stay inline. Move, retag, or do longer edits in a focused popup.',
+    start: 585,
     duration: 150
   }
 ];
@@ -67,11 +68,29 @@ const textPanelStyle: React.CSSProperties = {
   padding: '28px 30px'
 };
 
+const FeaturePill: React.FC<{ children: string }> = ({ children }) => (
+  <span
+    style={{
+      background: palette.paperMuted,
+      border: `1px solid ${palette.line}`,
+      borderRadius: 999,
+      color: palette.muted,
+      display: 'inline-block',
+      fontSize: 14,
+      fontWeight: 500,
+      letterSpacing: '0.02em',
+      padding: '6px 16px'
+    }}
+  >
+    {children}
+  </span>
+);
+
 export const DailyNotesDesktopDemo: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const introOpacity = interpolate(frame, [0, 20, 70, 88], [0, 1, 1, 0], {
+  const introOpacity = interpolate(frame, [0, 20, 90, 118], [0, 1, 1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp'
   });
@@ -80,12 +99,17 @@ export const DailyNotesDesktopDemo: React.FC = () => {
     extrapolateRight: 'clamp'
   });
 
+  const outroProgress = interpolate(frame, [735, 760], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp'
+  });
+
   return (
     <AbsoluteFill
       style={{
-        background: `radial-gradient(circle at top, rgba(199,195,186,0.24), transparent 36%), ${palette.page}`,
+        background: `radial-gradient(circle at 30% 20%, rgba(199,195,186,0.28), transparent 50%), ${palette.page}`,
         color: palette.ink,
-        fontFamily: '"Anthropic Sans", "Inter", sans-serif'
+        fontFamily: '"Inter", "SF Pro Display", -apple-system, sans-serif'
       }}
     >
       <AbsoluteFill
@@ -96,19 +120,20 @@ export const DailyNotesDesktopDemo: React.FC = () => {
         }}
       />
 
+      {/* Intro */}
       <AbsoluteFill
         style={{
           justifyContent: 'center',
-          padding: '80px 96px'
+          padding: '80px 96px',
+          opacity: introOpacity,
+          transform: `translateY(${introTranslate}px)`
         }}
       >
         <div
           style={{
             ...cardStyle,
-            opacity: introOpacity,
-            transform: `translateY(${introTranslate}px)`,
-            padding: '40px 44px',
-            width: 700
+            padding: '48px 52px',
+            maxWidth: 780
           }}
         >
           <div
@@ -116,37 +141,48 @@ export const DailyNotesDesktopDemo: React.FC = () => {
               color: palette.muted,
               fontSize: 13,
               letterSpacing: '0.18em',
-              marginBottom: 16,
+              marginBottom: 20,
               textTransform: 'uppercase',
-              fontWeight: 500
+              fontWeight: 600
             }}
           >
-            Daily Notes Desktop
+            Introducing
           </div>
           <div
             style={{
-              fontFamily: '"Anthropic Serif", "Iowan Old Style", serif',
-              fontSize: 78,
+              fontSize: 88,
               lineHeight: 0.94,
-              fontWeight: 330,
-              marginBottom: 18
+              fontWeight: 300,
+              marginBottom: 22,
+              letterSpacing: '-0.02em'
             }}
           >
-            Calm local planning for every day.
+            Solstice
           </div>
           <div
             style={{
               color: palette.muted,
-              fontSize: 24,
-              lineHeight: 1.5,
-              maxWidth: 560
+              fontSize: 26,
+              lineHeight: 1.45,
+              maxWidth: 580,
+              marginBottom: 28
             }}
           >
-            A desktop workspace for daily notes, project-tagged tasks, and fast inline edits.
+            A calm, local-first daily planner.
+            <br />
+            Notes and tasks organized by day, not by folder.
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <FeaturePill>Calendar</FeaturePill>
+            <FeaturePill>Knowledge Graph</FeaturePill>
+            <FeaturePill>Activity Heatmap</FeaturePill>
+            <FeaturePill>Search</FeaturePill>
+            <FeaturePill>Local-first</FeaturePill>
           </div>
         </div>
       </AbsoluteFill>
 
+      {/* Feature shots */}
       {shots.map((shot) => (
         <Sequence key={shot.src} from={shot.start} durationInFrames={shot.duration}>
           <Shot
@@ -158,42 +194,55 @@ export const DailyNotesDesktopDemo: React.FC = () => {
         </Sequence>
       ))}
 
-      <Sequence from={645} durationInFrames={45}>
+      {/* Outro */}
+      <Sequence from={735} durationInFrames={75}>
         <AbsoluteFill
           style={{
-            alignItems: 'flex-start',
-            justifyContent: 'flex-end',
-            padding: '0 96px 72px'
+            justifyContent: 'center',
+            alignItems: 'center',
+            opacity: outroProgress
           }}
         >
           <div
             style={{
-              ...textPanelStyle,
-              width: 560,
-              background: palette.paperMuted
+              ...cardStyle,
+              padding: '52px 64px',
+              textAlign: 'center',
+              maxWidth: 700
             }}
           >
             <div
               style={{
-                color: palette.muted,
-                fontSize: 13,
-                letterSpacing: '0.12em',
-                marginBottom: 14,
-                textTransform: 'uppercase',
-                fontWeight: 500
+                fontSize: 64,
+                fontWeight: 300,
+                letterSpacing: '-0.02em',
+                marginBottom: 16
               }}
             >
-              Built with Electron, React, TypeScript, Tailwind, Zod, Playwright, and Remotion
+              Solstice
             </div>
             <div
               style={{
-                fontFamily: '"Anthropic Serif", "Iowan Old Style", serif',
-                fontSize: 46,
-                lineHeight: 1.06,
-                fontWeight: 330
+                color: palette.muted,
+                fontSize: 22,
+                lineHeight: 1.5,
+                marginBottom: 28
               }}
             >
-              Daily Notes Desktop demo
+              Open source. Local-first. Built with Electron, React & TypeScript.
+            </div>
+            <div
+              style={{
+                background: palette.ink,
+                borderRadius: 14,
+                color: '#fff',
+                display: 'inline-block',
+                fontSize: 18,
+                fontWeight: 500,
+                padding: '14px 32px'
+              }}
+            >
+              github.com/amit-biswas-1992/solstice
             </div>
           </div>
         </AbsoluteFill>
@@ -221,11 +270,11 @@ const Shot: React.FC<{
     }
   });
 
-  const opacity = interpolate(frame, [0, 10, 115, 135], [0, 1, 1, 0], {
+  const opacity = interpolate(frame, [0, 12, 125, 148], [0, 1, 1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp'
   });
-  const screenScale = interpolate(frame, [0, 140], [1.06, 1], {
+  const screenScale = interpolate(frame, [0, 140], [1.04, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp'
   });
@@ -274,22 +323,22 @@ const Shot: React.FC<{
         >
           <div
             style={{
-              color: palette.muted,
+              color: palette.accent,
               fontSize: 13,
               letterSpacing: '0.14em',
               marginBottom: 14,
               textTransform: 'uppercase',
-              fontWeight: 500
+              fontWeight: 600
             }}
           >
             {eyebrow}
           </div>
           <div
             style={{
-              fontFamily: '"Anthropic Serif", "Iowan Old Style", serif',
-              fontSize: 50,
-              lineHeight: 1.02,
-              fontWeight: 330,
+              fontSize: 46,
+              lineHeight: 1.06,
+              fontWeight: 300,
+              letterSpacing: '-0.01em',
               marginBottom: 18
             }}
           >
@@ -298,7 +347,7 @@ const Shot: React.FC<{
           <div
             style={{
               color: palette.muted,
-              fontSize: 23,
+              fontSize: 21,
               lineHeight: 1.5
             }}
           >

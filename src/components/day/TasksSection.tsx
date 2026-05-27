@@ -45,6 +45,7 @@ export default function TasksSection({
   const [editingText, setEditingText] = useState('');
   const [editingProjectId, setEditingProjectId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const projectById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
@@ -268,37 +269,62 @@ export default function TasksSection({
   return (
     <section className={sectionClass} aria-label="Tasks">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg leading-6 font-medium text-[color:var(--color-ink)]">Tasks</h3>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen((current) => !current)}
+        >
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)] text-[color:var(--color-copy-muted)]">
+            <svg
+              className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-lg leading-6 font-medium text-[color:var(--color-ink)]">Tasks</h3>
+            <p className="text-xs text-[color:var(--color-copy-muted)]">
+              {openTasks.length} open, {doneTasks.length} done
+            </p>
+          </div>
+        </button>
         <div className="flex items-center gap-2">
           {openTasks.length > 0 && (
             <span className="rounded-full bg-[color:var(--color-ink)] px-2 py-0.5 text-[10px] font-bold text-white">
               {openTasks.length}
             </span>
           )}
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[color:var(--color-line)] px-3 text-xs font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-paper-muted)]"
-            onClick={() => {
-              setIsAdding((current) => !current);
-              resetInlineState();
-              setDraftProjectId(defaultProjectId ?? '');
-            }}
-          >
-            {isAdding ? (
-              'Cancel'
-            ) : (
-              <>
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path d="M12 5v14m-7-7h14" strokeLinecap="round" />
-                </svg>
-                Add task
-              </>
-            )}
-          </button>
+          {isOpen && (
+            <button
+              type="button"
+              className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[color:var(--color-line)] px-3 text-xs font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-paper-muted)]"
+              onClick={() => {
+                setIsAdding((current) => !current);
+                resetInlineState();
+                setDraftProjectId(defaultProjectId ?? '');
+              }}
+            >
+              {isAdding ? (
+                'Cancel'
+              ) : (
+                <>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path d="M12 5v14m-7-7h14" strokeLinecap="round" />
+                  </svg>
+                  Add task
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {isAdding && (
+      {isOpen && isAdding && (
         <form className="mt-3 grid gap-2" onKeyDown={handleEscape} onSubmit={handleAddTask}>
           <input
             aria-label="New task"
@@ -355,11 +381,7 @@ export default function TasksSection({
         </form>
       )}
 
-      {tasks.length === 0 ? (
-        <p className="mt-3 text-sm leading-5 text-[color:var(--color-copy-muted)]">
-          No tasks for this day yet.
-        </p>
-      ) : (
+      {!isOpen ? null : tasks.length === 0 ? null : (
         <div className="mt-3 grid gap-1">
           {openTasks.map((task) => (
             <div key={task.id} className="rounded-[12px] p-2.5 transition hover:bg-[color:var(--color-paper-muted)]/40">

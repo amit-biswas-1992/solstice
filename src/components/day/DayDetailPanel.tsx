@@ -318,7 +318,10 @@ export default function DayDetailPanel({
   };
 
   return (
-    <aside className="grid content-start gap-3" aria-labelledby="selected-day-panel-title">
+    <aside
+      className="grid content-start gap-3 xl:sticky xl:top-5 xl:self-start"
+      aria-labelledby="selected-day-panel-title"
+    >
       {/* Day header */}
       <header className={sectionClass}>
         <div className="flex items-start justify-between gap-3">
@@ -338,16 +341,9 @@ export default function DayDetailPanel({
               {activeProjectName ? ` · ${activeProjectName}` : ''}
             </p>
           </div>
-          <button
-            type="button"
-            className="rounded-lg border border-[color:var(--color-line)] p-1.5 text-[color:var(--color-copy-muted)] transition hover:bg-[color:var(--color-paper-muted)] hover:text-[color:var(--color-ink)]"
-            onClick={() => setShowCommandBar((v) => !v)}
-            title="Command bar"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
-            </svg>
-          </button>
+          <span className="rounded-full bg-[color:var(--color-paper-muted)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--color-copy-muted)]">
+            {tasks.length} tasks
+          </span>
         </div>
 
         {/* Linked projects pills */}
@@ -367,18 +363,48 @@ export default function DayDetailPanel({
         )}
       </header>
 
-      {/* Command bar (collapsible) */}
-      {showCommandBar && (
-        <section className={sectionClass} aria-label="Organizer bar">
-          <h3 className="mb-2 text-sm font-medium text-[color:var(--color-ink)]">Quick command</h3>
-          <CommandBar
-            activeProjectName={activeProjectName}
-            isBusy={isRunningCommand}
-            onSubmit={handleCommand}
-            selectedDate={selectedDate}
-          />
-        </section>
-      )}
+      <section className={sectionClass} aria-label="Organizer bar">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 text-left"
+          aria-expanded={showCommandBar}
+          onClick={() => setShowCommandBar((current) => !current)}
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)] text-[color:var(--color-copy-muted)]">
+              <svg
+                className={`h-4 w-4 transition-transform ${showCommandBar ? 'rotate-90' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-lg leading-6 font-medium text-[color:var(--color-ink)]">Quick command</h3>
+              <p className="text-xs text-[color:var(--color-copy-muted)]">
+                Organizer bar for fast local actions
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full bg-[color:var(--color-paper-muted)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--color-copy-muted)]">
+            {showCommandBar ? 'Open' : 'Closed'}
+          </span>
+        </button>
+
+        {showCommandBar && (
+          <div className="mt-3">
+            <CommandBar
+              activeProjectName={activeProjectName}
+              isBusy={isRunningCommand}
+              onSubmit={handleCommand}
+              selectedDate={selectedDate}
+            />
+          </div>
+        )}
+      </section>
 
       <TasksSection
         defaultProjectId={activeProjectId ?? undefined}

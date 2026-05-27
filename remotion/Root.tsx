@@ -9,7 +9,7 @@ export const RemotionRoot = () => {
       width={1600}
       height={900}
       fps={30}
-      durationInFrames={690}
+      durationInFrames={810}
     />
   );
 };

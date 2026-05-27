@@ -38,7 +38,10 @@ export default function NotesSection({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [editingProjectId, setEditingProjectId] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const projectById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
     [projects]
@@ -59,6 +62,7 @@ export default function NotesSection({
   useEffect(() => {
     resetInlineState();
     resetComposer();
+    setImportError(null);
   }, [defaultProjectId, selectedDate]);
 
   const handleAddNote = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -115,6 +119,34 @@ export default function NotesSection({
     }
   };
 
+  const handleImportFile = async () => {
+    setImportError(null);
+    setIsImporting(true);
+
+    try {
+      const imported = await window.dailyNotesDesktop.pickNoteFile();
+      if (!imported) {
+        return;
+      }
+
+      const noteText = `${imported.fileName}\n\n${imported.text}`.trim();
+      const saved = await onAddNote({
+        text: noteText,
+        projectId: normalizeProjectId(draftProjectId || defaultProjectId || '')
+      });
+
+      if (saved) {
+        resetComposer();
+      }
+    } catch (error) {
+      setImportError(
+        error instanceof Error ? error.message : 'Unable to import the selected file as a note.'
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const renderLinkifiedText = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const parts = text.split(urlRegex);
@@ -140,37 +172,76 @@ export default function NotesSection({
   return (
     <section className={sectionClass} aria-label="Notes">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg leading-6 font-medium text-[color:var(--color-ink)]">Notes</h3>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen((current) => !current)}
+        >
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)] text-[color:var(--color-copy-muted)]">
+            <svg
+              className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-lg leading-6 font-medium text-[color:var(--color-ink)]">Notes</h3>
+            <p className="text-xs text-[color:var(--color-copy-muted)]">
+              {notes.length} note{notes.length === 1 ? '' : 's'}
+            </p>
+          </div>
+        </button>
         <div className="flex items-center gap-2">
           {notes.length > 0 && (
             <span className="rounded-full bg-[color:var(--color-paper-muted)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--color-copy-muted)]">
               {notes.length}
             </span>
           )}
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[color:var(--color-line)] px-3 text-xs font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-paper-muted)]"
-            onClick={() => {
-              setIsAdding((current) => !current);
-              resetInlineState();
-              setDraftProjectId(defaultProjectId ?? '');
-            }}
-          >
-            {isAdding ? (
-              'Cancel'
-            ) : (
-              <>
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path d="M12 5v14m-7-7h14" strokeLinecap="round" />
-                </svg>
-                Add note
-              </>
-            )}
-          </button>
+          {isOpen && (
+            <>
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[color:var(--color-line)] px-3 text-xs font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-paper-muted)] disabled:opacity-60"
+                onClick={() => void handleImportFile()}
+                disabled={isImporting}
+              >
+                {isImporting ? 'Importing...' : 'Import file'}
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[color:var(--color-line)] px-3 text-xs font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--color-paper-muted)]"
+                onClick={() => {
+                  setIsAdding((current) => !current);
+                  resetInlineState();
+                  setDraftProjectId(defaultProjectId ?? '');
+                }}
+              >
+                {isAdding ? (
+                  'Cancel'
+                ) : (
+                  <>
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path d="M12 5v14m-7-7h14" strokeLinecap="round" />
+                    </svg>
+                    Add note
+                  </>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {isAdding && (
+      {isOpen && importError ? (
+        <p className="mt-3 text-sm leading-5 text-[color:var(--color-error)]">{importError}</p>
+      ) : null}
+
+      {isOpen && isAdding && (
         <form className="mt-3 grid gap-2" onKeyDown={handleEscape} onSubmit={handleAddNote}>
           <textarea
             aria-label="New note"
@@ -201,11 +272,7 @@ export default function NotesSection({
         </form>
       )}
 
-      {notes.length === 0 ? (
-        <p className="mt-3 text-sm leading-5 text-[color:var(--color-copy-muted)]">
-          No notes for this day yet.
-        </p>
-      ) : (
+      {!isOpen ? null : notes.length === 0 ? null : (
         <ul className="mt-3 grid gap-1">
           {notes.map((note) => (
             <li key={note.id} className="group rounded-[12px] p-2.5 transition hover:bg-[color:var(--color-paper-muted)]/40">

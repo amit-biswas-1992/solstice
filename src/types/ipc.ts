@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type {
+  ImportedNoteFile,
   StoreBootstrap,
   UnlockResult,
   UnlockedStoreSnapshot
@@ -11,6 +12,7 @@ const isoTimestampSchema = z.string().datetime({ offset: true });
 
 export const IPC = {
   LOAD_STORE: 'storage:loadStore',
+  PICK_NOTE_FILE: 'dialog:pickNoteFile',
   SAVE_STORE: 'storage:saveStore',
   UNLOCK: 'auth:unlock'
 } as const;
@@ -61,12 +63,14 @@ export type PinPayload = z.infer<typeof pinPayloadSchema>;
 
 export interface IpcRequestMap {
   [IPC.LOAD_STORE]: void;
+  [IPC.PICK_NOTE_FILE]: void;
   [IPC.SAVE_STORE]: UnlockedStoreSnapshot;
   [IPC.UNLOCK]: PinPayload;
 }
 
 export interface IpcResponseMap {
   [IPC.LOAD_STORE]: StoreBootstrap;
+  [IPC.PICK_NOTE_FILE]: ImportedNoteFile | null;
   [IPC.SAVE_STORE]: UnlockedStoreSnapshot;
   [IPC.UNLOCK]: UnlockResult;
 }

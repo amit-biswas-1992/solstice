@@ -1,7 +1,10 @@
-import { app, ipcMain } from 'electron';
+import { app, dialog, ipcMain } from 'electron';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { bootstrapStore, inspectStore, writeStore } from '../storage/fileStore.js';
 import { resolveAppDataStorePaths } from '../storage/appPaths.js';
 import type {
+  ImportedNoteFile,
   StoreBootstrap,
   StoreSummary,
   UnlockResult,
@@ -137,14 +140,45 @@ export const saveUnlockedStoreAtRoot = async (
   return createUnlockedStoreSnapshot(savedStore);
 };
 
+export const pickNoteFileFromSystem = async (): Promise<ImportedNoteFile | null> => {
+  const result = await dialog.showOpenDialog({
+    title: 'Import note from file',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Text files', extensions: ['txt', 'md', 'markdown', 'json', 'csv', 'log'] },
+      { name: 'All files', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  const selectedPath = result.filePaths[0];
+  const fileBuffer = await fs.readFile(selectedPath, 'utf8');
+  const text = fileBuffer.trim();
+
+  if (!text) {
+    throw new Error('The selected file is empty.');
+  }
+
+  return {
+    fileName: path.basename(selectedPath),
+    path: selectedPath,
+    text
+  };
+};
+
 export const registerStorageIpc = () => {
   ipcMain.removeHandler(IPC.LOAD_STORE);
+  ipcMain.removeHandler(IPC.PICK_NOTE_FILE);
   ipcMain.removeHandler(IPC.SAVE_STORE);
   ipcMain.removeHandler(IPC.UNLOCK);
 
   ipcMain.handle(IPC.LOAD_STORE, () =>
     loadBootstrapStateFromRoot(resolveAppDataStorePaths(app.getPath('userData')).rootDir)
   );
+  ipcMain.handle(IPC.PICK_NOTE_FILE, () => pickNoteFileFromSystem());
   ipcMain.handle(IPC.SAVE_STORE, (_event, snapshot: unknown) =>
     saveUnlockedStoreAtRoot(
       resolveAppDataStorePaths(app.getPath('userData')).rootDir,

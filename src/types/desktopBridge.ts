@@ -1,5 +1,11 @@
 import type { EntriesByDate, Project } from './models';
 
+export interface ImportedNoteFile {
+  fileName: string;
+  path: string;
+  text: string;
+}
+
 export interface UnlockedStoreSnapshot {
   settings: {
     lastOpenedMonth: string;
@@ -38,6 +44,7 @@ export type UnlockResult =
 export interface DailyNotesDesktopApi {
   readonly version: string;
   loadStore: () => Promise<StoreBootstrap>;
+  pickNoteFile: () => Promise<ImportedNoteFile | null>;
   saveStore: (store: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>;
   unlock: (pin: string) => Promise<UnlockResult>;
 }

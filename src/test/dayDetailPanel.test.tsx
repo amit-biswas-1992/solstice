@@ -207,6 +207,38 @@ describe('Day detail panel', () => {
     expect(onPersistStore).not.toHaveBeenCalled();
   });
 
+  it('imports a local file into the notes section as a new note', async () => {
+    const pickNoteFile = vi.fn().mockResolvedValue({
+      fileName: 'brainstorm.md',
+      path: '/tmp/brainstorm.md',
+      text: 'Imported note body from file browser.'
+    });
+
+    Object.defineProperty(window, 'dailyNotesDesktop', {
+      configurable: true,
+      value: {
+        version: '0.1.0',
+        loadStore: vi.fn(),
+        pickNoteFile,
+        saveStore: vi.fn(),
+        unlock: vi.fn()
+      }
+    });
+
+    const { onPersistStore, user } = renderShell();
+
+    await user.click(screen.getByRole('button', { name: 'Import file' }));
+
+    expect(pickNoteFile).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/brainstorm\.md/i)).toBeInTheDocument();
+    expect(screen.getByText(/imported note body from file browser\./i)).toBeInTheDocument();
+
+    const savedSnapshot = onPersistStore.mock.calls.at(-1)?.[0];
+    expect(savedSnapshot?.entries['2026-05-25']?.notes.some((note) => note.text.includes('brainstorm.md'))).toBe(
+      true
+    );
+  });
+
   it('keeps editors open and shows an error status when save fails without throwing', async () => {
     const failingPersist = vi
       .fn<(snapshot: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>>()
@@ -235,6 +267,7 @@ describe('Day detail panel', () => {
       value: {
         version: '0.1.0',
         loadStore: vi.fn().mockResolvedValue(createBootstrap(store)),
+        pickNoteFile: vi.fn(),
         saveStore,
         unlock: vi.fn()
       }

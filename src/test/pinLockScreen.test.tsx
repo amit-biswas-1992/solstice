@@ -84,6 +84,7 @@ describe('PinLockScreen bootstrap flow', () => {
       value: {
         version: '0.1.0',
         loadStore,
+        pickNoteFile: vi.fn(),
         saveStore,
         unlock
       }
