@@ -6,6 +6,7 @@ interface ProjectSidebarProps {
   activeProjectId: string | null;
   entries: EntriesByDate;
   onCreateProject: (name: string) => Promise<boolean>;
+  onLock: () => void;
   onSelectProject: (projectId: string | null) => void;
   onToggleCollapsed: () => void;
   projects: Project[];
@@ -18,11 +19,13 @@ export default function ProjectSidebar({
   activeProjectId,
   entries,
   onCreateProject,
+  onLock,
   onSelectProject,
   onToggleCollapsed,
   projects
 }: ProjectSidebarProps) {
   const [projectName, setProjectName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const { activeDays, projectUsageById, unassignedItems } = useMemo(() => {
     const usageById = new Map<string, number>();
     let nextActiveDays = 0;
@@ -57,95 +60,169 @@ export default function ProjectSidebar({
     const saved = await onCreateProject(projectName);
     if (saved) {
       setProjectName('');
+      setIsCreating(false);
     }
   };
 
   return (
     <aside
       className={[
-        'grid min-h-full rounded-[24px] border border-[color:var(--color-line)] bg-white',
-        collapsed
-          ? 'grid-rows-[auto_minmax(0,1fr)] px-[10px] pb-3 pt-[14px]'
-          : 'grid-rows-[auto_auto_minmax(0,1fr)_auto] px-4 pb-4 pt-[18px]'
+        'flex h-full flex-col',
+        collapsed ? 'w-[52px] items-center py-3' : 'py-4 pr-2'
       ].join(' ')}
       aria-labelledby="project-sidebar-title"
     >
-      <div className={collapsed ? 'grid gap-3 px-1 py-0' : 'grid gap-[10px] px-1.5 pt-1'}>
-        <div>
-          {!collapsed ? (
-            <p className="mb-3 text-[12px] font-medium uppercase tracking-[0.18em] text-[color:var(--color-copy-muted)]">
-              Projects
-            </p>
-          ) : null}
+      {/* Top: Toggle + Title */}
+      <div className={collapsed ? 'flex flex-col items-center gap-3' : 'flex items-center gap-3 px-3'}>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#8b8680] transition hover:bg-[#ece8e1] hover:text-[#1a1a1a]"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={onToggleCollapsed}
+        >
+          <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            {collapsed ? (
+              <>
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </>
+            ) : (
+              <>
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </>
+            )}
+          </svg>
+        </button>
+        {!collapsed && (
           <h2
             id="project-sidebar-title"
-            className={collapsed ? 'sr-only' : 'text-[22px] leading-[26px] font-[330] text-[color:var(--color-ink)]'}
+            className="text-sm font-medium text-[#1a1a1a]"
           >
             Projects
           </h2>
-        </div>
-        <button
-          type="button"
-          className="inline-flex h-10 w-10 items-center justify-center self-start rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)] text-base text-[color:var(--color-ink)] transition hover:bg-white"
-          aria-label={collapsed ? 'Expand projects sidebar' : 'Collapse projects sidebar'}
-          aria-pressed={collapsed}
-          onClick={onToggleCollapsed}
-        >
-          {collapsed ? '»' : '«'}
-        </button>
-        {!collapsed ? (
-          <p className="text-sm leading-5 text-[color:var(--color-copy-muted)]">
-            {projects.length} loaded · {activeDays} active days
-          </p>
-        ) : null}
+        )}
       </div>
 
-      {!collapsed ? (
-        <form className="mt-4 grid gap-3" onSubmit={handleCreateProject}>
-          <label className="grid gap-2">
-            <span className="text-[12px] font-medium uppercase tracking-[0.12em] text-[color:var(--color-copy-muted)]">
+      {/* New project button */}
+      {!collapsed && (
+        <div className="mt-3 px-2">
+          {isCreating ? (
+            <form className="grid gap-2" onSubmit={handleCreateProject}>
+              <input
+                aria-label="Project name"
+                autoFocus
+                placeholder="Project name"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setIsCreating(false);
+                    setProjectName('');
+                  }
+                }}
+                className="h-9 rounded-lg border border-[#e8e2db] bg-white px-3 text-sm text-[#1a1a1a] outline-none transition placeholder:text-[#c5bfb8] focus:border-[#1a1a1a] focus:ring-1 focus:ring-[#1a1a1a]"
+              />
+              <div className="flex gap-1.5">
+                <button
+                  type="submit"
+                  disabled={projectName.trim().length === 0}
+                  className="h-8 flex-1 rounded-lg bg-[#1a1a1a] text-xs font-medium text-white transition hover:bg-[#333] disabled:opacity-40"
+                >
+                  Create
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsCreating(false); setProjectName(''); }}
+                  className="h-8 rounded-lg px-3 text-xs text-[#8b8680] transition hover:bg-[#ece8e1]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsCreating(true)}
+              className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-sm text-[#8b8680] transition hover:bg-[#ece8e1] hover:text-[#1a1a1a]"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path d="M12 5v14m-7-7h14" strokeLinecap="round" />
+              </svg>
               New project
-            </span>
-            <input
-              aria-label="Quick project name"
-              placeholder="Add a project"
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              className="h-11 rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 text-base text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={projectName.trim().length === 0}
-            className="inline-flex h-11 items-center justify-center rounded-[10px] bg-[color:var(--color-ink)] px-5 text-base font-medium text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Add
-          </button>
-        </form>
-      ) : null}
+            </button>
+          )}
+        </div>
+      )}
 
-      <div className={collapsed ? 'mt-4 grid content-start gap-2' : 'mt-5 grid content-start gap-2'} role="list" aria-label="Projects">
+      {collapsed && (
+        <button
+          type="button"
+          onClick={() => setIsCreating(true)}
+          className="mt-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8b8680] transition hover:bg-[#ece8e1] hover:text-[#1a1a1a]"
+          title="New project"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path d="M12 5v14m-7-7h14" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+
+      {/* Stats */}
+      {!collapsed && (
+        <p className="mt-3 px-5 text-[11px] text-[#b5afa8]">
+          {projects.length} projects · {activeDays} active days
+        </p>
+      )}
+
+      {/* Project list */}
+      <div
+        className={[
+          'flex-1 overflow-y-auto',
+          collapsed ? 'mt-3 flex flex-col items-center gap-1' : 'mt-2 flex flex-col gap-0.5 px-2'
+        ].join(' ')}
+        role="list"
+        aria-label="Projects"
+      >
+        {/* All projects filter */}
         <button
           type="button"
           className={[
-            'inline-flex min-h-11 items-center rounded-full border px-4 text-left text-sm leading-5 transition',
+            'rounded-lg text-left text-sm transition',
+            collapsed
+              ? 'flex h-8 w-8 items-center justify-center'
+              : 'flex items-center gap-2.5 px-3 py-2',
             activeProjectId === null
-              ? 'border-[color:var(--color-ink)] bg-[color:var(--color-paper-muted)] text-[color:var(--color-ink)]'
-              : 'border-[color:var(--color-line)] bg-white text-[color:var(--color-copy-muted)] hover:text-[color:var(--color-ink)]',
-            collapsed ? 'justify-center px-0' : ''
+              ? collapsed
+                ? 'bg-[#ece8e1] text-[#1a1a1a]'
+                : 'bg-[#ece8e1] text-[#1a1a1a]'
+              : 'text-[#8b8680] hover:bg-[#f0ece7] hover:text-[#1a1a1a]'
           ].join(' ')}
           onClick={() => onSelectProject(null)}
+          title={collapsed ? 'All projects' : undefined}
         >
-          {collapsed ? 'All' : 'All projects'}
+          <svg className={collapsed ? 'h-4 w-4' : 'h-3.5 w-3.5 shrink-0'} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+          </svg>
+          {!collapsed && <span>All projects</span>}
         </button>
+
+        {/* Project items */}
         {projects.length === 0 ? (
-          <p className={collapsed ? 'px-1 text-center text-xs leading-4 text-[color:var(--color-copy-muted)]' : 'text-sm leading-5 text-[color:var(--color-copy-muted)]'}>
-            {collapsed ? 'No projects' : 'No projects yet. Add one to start organizing days.'}
-          </p>
+          !collapsed ? (
+            <p className="px-3 py-2 text-xs text-[#b5afa8]">
+              No projects yet
+            </p>
+          ) : null
         ) : (
           projects.map((project, index) => {
             const linkedItems = projectUsageById.get(project.id) ?? 0;
             const isActiveFilter = activeProjectId === project.id;
+            const dotColor = project.color ?? FALLBACK_SWATCHES[index % FALLBACK_SWATCHES.length];
 
             return (
               <button
@@ -153,53 +230,62 @@ export default function ProjectSidebar({
                 type="button"
                 aria-label={project.name}
                 className={[
-                  'flex min-h-14 items-start gap-3 rounded-[16px] border px-3 py-3 text-left transition',
+                  'rounded-lg text-left transition',
+                  collapsed
+                    ? 'flex h-8 w-8 items-center justify-center'
+                    : 'flex items-center gap-2.5 px-3 py-2',
                   isActiveFilter
-                    ? 'border-[color:var(--color-ink)] bg-[color:var(--color-paper-muted)]'
-                    : 'border-[color:var(--color-line)] bg-white hover:bg-[color:var(--color-paper-muted)]/60',
-                  collapsed ? 'justify-center px-2' : ''
+                    ? 'bg-[#ece8e1] text-[#1a1a1a]'
+                    : 'text-[#8b8680] hover:bg-[#f0ece7] hover:text-[#1a1a1a]'
                 ].join(' ')}
                 onClick={() => onSelectProject(isActiveFilter ? null : project.id)}
+                title={collapsed ? `${project.name} (${linkedItems})` : undefined}
               >
                 <span
-                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{
-                    backgroundColor: project.color ?? FALLBACK_SWATCHES[index % FALLBACK_SWATCHES.length]
-                  }}
+                  className={collapsed ? 'h-2.5 w-2.5 rounded-full' : 'h-2 w-2 shrink-0 rounded-full'}
+                  style={{ backgroundColor: dotColor }}
                   aria-hidden="true"
                 />
-                <div className={collapsed ? 'hidden' : 'min-w-0 flex-1'}>
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="truncate text-base font-medium text-[color:var(--color-ink)]">
-                      {project.name}
-                    </h3>
-                    {isActiveFilter ? (
-                      <span className="rounded-full bg-white px-3 py-1 text-[12px] font-medium text-[color:var(--color-copy-muted)]">
-                        Open
-                      </span>
-                    ) : null}
+                {!collapsed && (
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">{project.name}</span>
+                    <span className="text-[11px] text-[#b5afa8]">
+                      {linkedItems} item{linkedItems === 1 ? '' : 's'}
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm leading-5 text-[color:var(--color-copy-muted)]">
-                    {linkedItems} item{linkedItems === 1 ? '' : 's'}
-                  </p>
-                </div>
-                {collapsed ? (
-                  <span className="text-base font-medium text-[color:var(--color-ink)]">
-                    {project.name.charAt(0).toUpperCase()}
-                  </span>
-                ) : null}
+                )}
               </button>
             );
           })
         )}
       </div>
 
-      {!collapsed ? (
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-[color:var(--color-line)] pt-4 text-[12px] uppercase tracking-[0.08em] text-[color:var(--color-copy-muted)]">
-          <span>{unassignedItems} unassigned items</span>
-          <span>Local JSON</span>
-        </div>
-      ) : null}
+      {/* Bottom section */}
+      <div className={collapsed ? 'mt-auto flex flex-col items-center gap-1 pt-3' : 'mt-auto pt-3'}>
+        {!collapsed && (
+          <p className="mb-2 px-5 text-[11px] text-[#b5afa8]">
+            {unassignedItems} unassigned · Local
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={onLock}
+          className={[
+            'rounded-lg text-[#8b8680] transition hover:bg-[#ece8e1] hover:text-[#1a1a1a]',
+            collapsed
+              ? 'flex h-8 w-8 items-center justify-center'
+              : 'flex w-full items-center gap-2.5 px-3 py-2 text-sm'
+          ].join(' ')}
+          title="Log out"
+        >
+          <svg className={collapsed ? 'h-4 w-4' : 'h-3.5 w-3.5 shrink-0'} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          {!collapsed && <span>Log out</span>}
+        </button>
+      </div>
     </aside>
   );
 }
