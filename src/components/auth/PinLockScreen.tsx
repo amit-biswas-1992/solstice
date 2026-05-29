@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { StoreSummary } from '../../types/desktopBridge';
 
 interface PinLockScreenProps {
@@ -10,18 +10,20 @@ interface PinLockScreenProps {
   summary: StoreSummary;
 }
 
-const summaryCardClass =
-  'rounded-[18px] border border-[color:var(--color-line)] bg-white/70 px-4 py-3';
-
 export default function PinLockScreen({
   appVersion,
   errorMessage,
   isSubmitting,
   onClearError,
   onUnlock,
-  summary
+  summary: _summary
 }: PinLockScreenProps) {
   const [pin, setPin] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -29,35 +31,45 @@ export default function PinLockScreen({
   };
 
   return (
-    <main className="flex min-h-screen items-stretch justify-center p-10">
-      <section
-        className="w-full max-w-[720px] rounded-[32px] border border-[color:var(--color-line)] bg-white p-10 shadow-[0_16px_48px_rgba(20,20,19,0.06)]"
-        aria-labelledby="pin-lock-title"
-      >
-        <p className="mb-3 text-[12px] font-medium uppercase tracking-[0.18em] text-[color:var(--color-copy-muted)]">
-          Locked workspace
-        </p>
-        <h1
-          id="pin-lock-title"
-          className="font-[var(--font-serif)] text-[clamp(2.6rem,6vw,4rem)] leading-[0.96] font-[330] text-[color:var(--color-ink)]"
-        >
-          Unlock Daily Notes
-        </h1>
-        <p className="mt-[18px] max-w-[40rem] text-base leading-6 font-[330] text-[color:var(--color-copy-muted)]">
-          Enter your PIN to load the local store snapshot and continue from your last workspace
-          checkpoint.
-        </p>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#f5f0eb]">
+      {/* Centered card */}
+      <div className="w-full max-w-[400px] px-6">
+        {/* Logo / Brand */}
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1a1a1a] shadow-lg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1a1a1a]">
+            Solstice
+          </h1>
+          <p className="mt-1.5 text-sm text-[#8b8680]">
+            Your calm, local-first daily planner
+          </p>
+        </div>
 
-        <form className="mt-7 grid gap-4" onSubmit={handleSubmit}>
-          <label htmlFor="pin-code" className="grid gap-2">
-            <span className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--color-copy-muted)]">
-              PIN code
-            </span>
+        {/* Login form card */}
+        <div className="rounded-2xl border border-[#e8e2db] bg-white p-6 shadow-sm">
+          <form onSubmit={handleSubmit}>
+            <label htmlFor="pin-code" className="block text-sm font-medium text-[#1a1a1a]">
+              Enter your PIN
+            </label>
             <input
+              ref={inputRef}
               id="pin-code"
               type="password"
               inputMode="numeric"
               autoComplete="current-password"
+              placeholder="••••"
               value={pin}
               onChange={(event) => {
                 if (errorMessage) {
@@ -65,53 +77,40 @@ export default function PinLockScreen({
                 }
                 setPin(event.target.value);
               }}
-              aria-describedby="pin-help"
-              className="h-12 w-full rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 text-base text-[color:var(--color-ink)] outline-none transition focus:border-[color:var(--color-line-strong)] focus:ring-2 focus:ring-[color:var(--color-line-strong)]"
+              className="mt-2 h-12 w-full rounded-xl border border-[#e8e2db] bg-[#faf8f5] px-4 text-center text-lg tracking-[0.3em] text-[#1a1a1a] outline-none transition placeholder:text-[#c5bfb8] focus:border-[#1a1a1a] focus:bg-white focus:ring-1 focus:ring-[#1a1a1a]"
             />
-          </label>
 
-          <p id="pin-help" className="text-sm leading-5 text-[color:var(--color-copy-muted)]">
-            Last opened month: {summary.lastOpenedMonth}
-          </p>
+            {errorMessage ? (
+              <p role="alert" className="mt-2.5 text-center text-sm text-[#c0392b]">
+                {errorMessage}
+              </p>
+            ) : null}
 
-          {errorMessage ? (
-            <p role="alert" className="text-sm font-medium text-[color:var(--color-error)]">
-              {errorMessage}
-            </p>
-          ) : null}
-
-          <div className="flex items-center gap-3">
             <button
               type="submit"
               disabled={isSubmitting || pin.trim().length === 0}
-              className="inline-flex h-11 items-center justify-center rounded-[10px] bg-[color:var(--color-ink)] px-5 text-base font-medium text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-4 h-12 w-full rounded-xl bg-[#1a1a1a] text-sm font-medium text-white transition hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {isSubmitting ? 'Unlocking...' : 'Unlock workspace'}
+              {isSubmitting ? (
+                <span className="inline-flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Unlocking...
+                </span>
+              ) : (
+                'Unlock'
+              )}
             </button>
-          </div>
-        </form>
-
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <SummaryCard label="Projects" value={`${summary.projectCount}`} />
-          <SummaryCard label="Entry days" value={`${summary.entryCount}`} />
-          <SummaryCard label="Selected date" value={summary.lastSelectedDate} />
+          </form>
         </div>
 
-        <p className="mt-6 text-[12px] uppercase tracking-[0.08em] text-[color:var(--color-copy-muted)]">
-          Bridge v{appVersion}
+        {/* Footer */}
+        <p className="mt-6 text-center text-xs text-[#b5afa8]">
+          v{appVersion} · Local-only · No cloud
         </p>
-      </section>
+      </div>
     </main>
-  );
-}
-
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className={summaryCardClass}>
-      <p className="m-0 text-[12px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-copy-muted)]">
-        {label}
-      </p>
-      <p className="mt-2 text-base font-medium text-[color:var(--color-ink)]">{value}</p>
-    </div>
   );
 }

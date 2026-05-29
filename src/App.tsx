@@ -169,9 +169,23 @@ export default function App() {
     );
   }
 
+  const handleLock = () => {
+    setStore(null);
+    setBootstrap((current) =>
+      current
+        ? {
+            ...current,
+            auth: { ...current.auth, isLocked: true },
+            store: undefined
+          }
+        : current
+    );
+  };
+
   return (
     <WorkspaceShell
       appVersion={window.dailyNotesDesktop.version}
+      onLock={handleLock}
       onPersistStore={handlePersistStore}
       store={unlockedStore}
     />

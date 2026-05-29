@@ -13,6 +13,7 @@ import type { EntriesByDate, Note, Project, Task } from '../../types/models';
 
 interface WorkspaceShellProps {
   appVersion: string;
+  onLock?: () => void;
   onPersistStore?: (store: UnlockedStoreSnapshot) => Promise<UnlockedStoreSnapshot>;
   store: UnlockedStoreSnapshot;
 }
@@ -27,28 +28,15 @@ type ViewMode = 'calendar' | 'graph' | 'heatmap';
 const todayKey = () => createDateKey(new Date());
 const todayMonthKey = () => createMonthKey(new Date());
 
-export default function WorkspaceShell({ appVersion, onPersistStore, store }: WorkspaceShellProps) {
-  const storeSelection = useMemo(
-    () => ({
-      visibleMonth: store.settings.lastOpenedMonth,
-      selectedDate: isDateInMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
-        ? store.settings.lastSelectedDate
-        : moveDateKeyToMonth(store.settings.lastSelectedDate, store.settings.lastOpenedMonth)
-    }),
-    [store.settings.lastOpenedMonth, store.settings.lastSelectedDate]
-  );
-  const [visibleMonth, setVisibleMonth] = useState(storeSelection.visibleMonth);
-  const [selectedDate, setSelectedDate] = useState(storeSelection.selectedDate);
+export default function WorkspaceShell({ appVersion, onLock, onPersistStore, store }: WorkspaceShellProps) {
+  // Always start on today's date and month
+  const [visibleMonth, setVisibleMonth] = useState(todayMonthKey());
+  const [selectedDate, setSelectedDate] = useState(todayKey());
   const [workspaceStore, setWorkspaceStore] = useState(store);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isProjectSidebarCollapsed, setIsProjectSidebarCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-
-  useEffect(() => {
-    setVisibleMonth(storeSelection.visibleMonth);
-    setSelectedDate(storeSelection.selectedDate);
-  }, [storeSelection.selectedDate, storeSelection.visibleMonth]);
 
   useEffect(() => {
     setWorkspaceStore(store);
@@ -434,131 +422,135 @@ export default function WorkspaceShell({ appVersion, onPersistStore, store }: Wo
   ];
 
   return (
-    <main className="flex min-h-screen items-stretch justify-center p-4 lg:p-7">
-      <section
-        className="min-h-[calc(100vh-56px)] w-full max-w-[1480px] rounded-[32px] border border-[color:var(--color-line)] bg-[rgba(248,248,246,0.92)] p-5 shadow-[0_24px_72px_rgba(20,20,19,0.07)] lg:p-8"
-        aria-labelledby="workspace-title"
-      >
-        {/* Header */}
-        <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex items-start gap-5">
-            <div>
-              <h1
-                id="workspace-title"
-                className="font-[var(--font-serif)] text-[clamp(1.8rem,4vw,3rem)] leading-[1] font-[330] text-[color:var(--color-ink)]"
-              >
-                Daily Notes
-              </h1>
-              <p className="mt-2 text-sm text-[color:var(--color-copy-muted)]">
-                {activeDays} days &middot; {totalNotes} notes &middot; {totalTasks} tasks
-              </p>
-            </div>
-          </div>
+    <main className="flex h-screen overflow-hidden p-0">
+      {/* Sidebar — outside the bordered content area */}
+      {viewMode === 'calendar' && (
+        <div className={[
+          'flex shrink-0 flex-col border-r border-[#e8e2db]',
+          isProjectSidebarCollapsed ? 'w-[60px]' : 'w-[220px]'
+        ].join(' ')}>
+          <ProjectSidebar
+            collapsed={isProjectSidebarCollapsed}
+            activeProjectId={activeProjectId}
+            entries={entries}
+            onCreateProject={handleCreateProject}
+            onLock={onLock ?? (() => window.location.reload())}
+            onSelectProject={setActiveProjectId}
+            onToggleCollapsed={() => setIsProjectSidebarCollapsed((current) => !current)}
+            projects={projects}
+          />
+        </div>
+      )}
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* View switcher */}
-            <div className="inline-flex rounded-[12px] border border-[color:var(--color-line)] bg-white p-1">
-              {viewButtons.map((vb) => (
-                <button
-                  key={vb.mode}
-                  type="button"
-                  className={[
-                    'inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-sm font-medium transition',
-                    viewMode === vb.mode
-                      ? 'bg-[color:var(--color-ink)] text-white'
-                      : 'text-[color:var(--color-copy-muted)] hover:text-[color:var(--color-ink)]'
-                  ].join(' ')}
-                  onClick={() => setViewMode(vb.mode)}
-                  title={`${vb.label} (${vb.mode === 'calendar' ? '1' : vb.mode === 'graph' ? '2' : '3'})`}
-                >
-                  <span aria-hidden="true">{vb.icon}</span>
-                  <span className="hidden sm:inline">{vb.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Today button */}
-            <button
-              type="button"
-              className={[
-                'inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-4 text-sm font-medium transition',
-                isToday
-                  ? 'border-[color:var(--color-ink)] bg-[color:var(--color-ink)] text-white'
-                  : 'border-[color:var(--color-line)] bg-white text-[color:var(--color-ink)] hover:bg-[color:var(--color-paper-muted)]'
-              ].join(' ')}
-              onClick={handleGoToToday}
-              title="Go to today (T)"
-            >
-              Today
-            </button>
-
-            {/* Search button */}
-            <button
-              type="button"
-              className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 text-sm text-[color:var(--color-copy-muted)] transition hover:bg-[color:var(--color-paper-muted)] hover:text-[color:var(--color-ink)]"
-              onClick={() => setIsSearchOpen(true)}
-              title="Search (⌘K)"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" strokeLinecap="round" />
-              </svg>
-              <span className="hidden sm:inline">Search</span>
-              <kbd className="hidden rounded border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)] px-1.5 py-0.5 text-[10px] font-medium sm:inline">
-                ⌘K
-              </kbd>
-            </button>
-          </div>
-        </header>
-
-        {/* Main content grid */}
-        <div
-          className={[
-            'grid items-stretch gap-4 lg:gap-6',
-            viewMode === 'calendar'
-              ? [
-                'xl:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(320px,380px)]',
-                  'xl:[&>*:last-child]:col-span-1',
-                  'lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:[&>*:last-child]:col-span-2',
-                  'md:grid-cols-[minmax(200px,240px)_minmax(0,1fr)]',
-                  isProjectSidebarCollapsed
-                    ? 'xl:grid-cols-[72px_minmax(0,1fr)_minmax(320px,380px)] lg:grid-cols-[72px_minmax(0,1fr)] md:grid-cols-[72px_minmax(0,1fr)]'
-                    : ''
-                ].join(' ')
-              : 'grid-cols-1'
-          ].join(' ')}
+      {/* Content area */}
+      <div className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-7">
+        <section
+          className="mx-auto w-full max-w-[1280px]"
+          aria-labelledby="workspace-title"
         >
-          {viewMode === 'calendar' && (
-            <>
-              <ProjectSidebar
-                collapsed={isProjectSidebarCollapsed}
-                activeProjectId={activeProjectId}
-                entries={entries}
-                onCreateProject={handleCreateProject}
-                onSelectProject={setActiveProjectId}
-                onToggleCollapsed={() => setIsProjectSidebarCollapsed((current) => !current)}
-                projects={projects}
-              />
-              <MonthGrid
-                activeProjectId={activeProjectId}
-                entries={entries}
-                monthKey={visibleMonth}
-                onNavigateMonth={handleNavigateMonth}
-                onSelectDate={handleSelectDate}
-                selectedDate={selectedDate}
-              />
-              <DayDetailPanel
-                activeProjectId={activeProjectId}
-                activeProjectName={activeProject?.name}
-                entries={entries}
-                onCommand={handleCommand}
-                onPersistEntries={persistEntries}
-                onSelectDate={handleSelectDate}
-                projects={projects}
-                selectedDate={selectedDate}
-              />
-            </>
-          )}
+          {/* Header */}
+          <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex items-start gap-5">
+              <div>
+                <h1
+                  id="workspace-title"
+                  className="font-[var(--font-serif)] text-[clamp(1.8rem,4vw,3rem)] leading-[1] font-[330] text-[color:var(--color-ink)]"
+                >
+                  Solstice
+                </h1>
+                <p className="mt-2 text-sm text-[color:var(--color-copy-muted)]">
+                  {activeDays} days &middot; {totalNotes} notes &middot; {totalTasks} tasks
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* View switcher */}
+              <div className="inline-flex rounded-[12px] border border-[color:var(--color-line)] bg-white p-1">
+                {viewButtons.map((vb) => (
+                  <button
+                    key={vb.mode}
+                    type="button"
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-sm font-medium transition',
+                      viewMode === vb.mode
+                        ? 'bg-[color:var(--color-ink)] text-white'
+                        : 'text-[color:var(--color-copy-muted)] hover:text-[color:var(--color-ink)]'
+                    ].join(' ')}
+                    onClick={() => setViewMode(vb.mode)}
+                    title={`${vb.label} (${vb.mode === 'calendar' ? '1' : vb.mode === 'graph' ? '2' : '3'})`}
+                  >
+                    <span aria-hidden="true">{vb.icon}</span>
+                    <span className="hidden sm:inline">{vb.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Today button */}
+              <button
+                type="button"
+                className={[
+                  'inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-4 text-sm font-medium transition',
+                  isToday
+                    ? 'border-[color:var(--color-ink)] bg-[color:var(--color-ink)] text-white'
+                    : 'border-[color:var(--color-line)] bg-white text-[color:var(--color-ink)] hover:bg-[color:var(--color-paper-muted)]'
+                ].join(' ')}
+                onClick={handleGoToToday}
+                title="Go to today (T)"
+              >
+                Today
+              </button>
+
+              {/* Search button */}
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-[color:var(--color-line)] bg-white px-3 text-sm text-[color:var(--color-copy-muted)] transition hover:bg-[color:var(--color-paper-muted)] hover:text-[color:var(--color-ink)]"
+                onClick={() => setIsSearchOpen(true)}
+                title="Search (⌘K)"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" strokeLinecap="round" />
+                </svg>
+                <span className="hidden sm:inline">Search</span>
+                <kbd className="hidden rounded border border-[color:var(--color-line)] bg-[color:var(--color-paper-muted)] px-1.5 py-0.5 text-[10px] font-medium sm:inline">
+                  ⌘K
+                </kbd>
+              </button>
+            </div>
+          </header>
+
+          {/* Main content grid */}
+          <div
+            className={[
+              'grid items-stretch gap-4 lg:gap-6',
+              viewMode === 'calendar'
+                ? 'xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:grid-cols-1'
+                : 'grid-cols-1'
+            ].join(' ')}
+          >
+            {viewMode === 'calendar' && (
+              <>
+                <MonthGrid
+                  activeProjectId={activeProjectId}
+                  entries={entries}
+                  monthKey={visibleMonth}
+                  onNavigateMonth={handleNavigateMonth}
+                  onSelectDate={handleSelectDate}
+                  selectedDate={selectedDate}
+                />
+                <DayDetailPanel
+                  activeProjectId={activeProjectId}
+                  activeProjectName={activeProject?.name}
+                  entries={entries}
+                  onCommand={handleCommand}
+                  onPersistEntries={persistEntries}
+                  onSelectDate={handleSelectDate}
+                  projects={projects}
+                  selectedDate={selectedDate}
+                />
+              </>
+            )}
 
           {viewMode === 'graph' && (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
@@ -614,27 +606,28 @@ export default function WorkspaceShell({ appVersion, onPersistStore, store }: Wo
           )}
         </div>
 
-        {/* Footer with keyboard hints */}
-        <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[color:var(--color-line)]/50 pt-4 text-[11px] text-[color:var(--color-copy-muted)]">
-          <span>Daily Notes Desktop v{appVersion}</span>
-          <div className="flex flex-wrap gap-4">
-            <span><kbd className="rounded border border-[color:var(--color-line)] px-1.5">T</kbd> today</span>
-            <span><kbd className="rounded border border-[color:var(--color-line)] px-1.5">⌘K</kbd> search</span>
-            <span><kbd className="rounded border border-[color:var(--color-line)] px-1.5">1</kbd><kbd className="ml-0.5 rounded border border-[color:var(--color-line)] px-1.5">2</kbd><kbd className="ml-0.5 rounded border border-[color:var(--color-line)] px-1.5">3</kbd> views</span>
-          </div>
-        </footer>
-      </section>
+          {/* Footer with keyboard hints */}
+          <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[color:var(--color-line)]/50 pt-4 text-[11px] text-[color:var(--color-copy-muted)]">
+            <span>Solstice v{appVersion}</span>
+            <div className="flex flex-wrap gap-4">
+              <span><kbd className="rounded border border-[color:var(--color-line)] px-1.5">T</kbd> today</span>
+              <span><kbd className="rounded border border-[color:var(--color-line)] px-1.5">⌘K</kbd> search</span>
+              <span><kbd className="rounded border border-[color:var(--color-line)] px-1.5">1</kbd><kbd className="ml-0.5 rounded border border-[color:var(--color-line)] px-1.5">2</kbd><kbd className="ml-0.5 rounded border border-[color:var(--color-line)] px-1.5">3</kbd> views</span>
+            </div>
+          </footer>
+        </section>
 
-      <SearchPanel
-        entries={entries}
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onSelectDate={(dateKey) => {
-          handleSelectDate(dateKey);
-          setIsSearchOpen(false);
-        }}
-        projects={projects}
-      />
+        <SearchPanel
+          entries={entries}
+          isOpen={isSearchOpen}
+          onClose={() => setIsSearchOpen(false)}
+          onSelectDate={(dateKey) => {
+            handleSelectDate(dateKey);
+            setIsSearchOpen(false);
+          }}
+          projects={projects}
+        />
+      </div>
     </main>
   );
 }
